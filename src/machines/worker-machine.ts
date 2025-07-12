@@ -60,7 +60,7 @@ export const workerMachine = setup({
           });
       },
     }),
-    resetContext: assign({
+    reset: assign({
       positions: (_ctx, _event) => null,
       colors: (_ctx, _event) => null,
     }),
@@ -77,7 +77,7 @@ export const workerMachine = setup({
       on: {
         start: {
           target: "waitingForColorData",
-          actions: ["resetContext", "start"],
+          actions: ["reset", "start"],
         },
       },
     },
@@ -94,14 +94,6 @@ export const workerMachine = setup({
         assignDepth: {
           target: "idle",
           actions: "assignDepth",
-        },
-      },
-    },
-    finished: {
-      on: {
-        start: {
-          target: "waitingForColorData",
-          actions: ["resetContext", "start"],
         },
       },
     },
