@@ -1,7 +1,7 @@
 'use client'
 
-import {createContext, use, useEffect} from 'react';
-import {assign, setup} from "xstate";
+import {createContext, use} from 'react';
+import {Actor, ActorRef, assign, MachineSnapshot, setup} from "xstate";
 import {useMachine} from "@xstate/react";
 import {match, P} from "ts-pattern";
 import {RawImage} from '@huggingface/transformers';
@@ -21,15 +21,18 @@ type WorkerStartEvent = { type: 'start'; dataUrl: string };
 type WorkerFinishEvent = { type: 'finish'; rawImage: RawImage };
 type WorkerEvent = WorkerStartEvent | WorkerFinishEvent
 type WorkerContext = {
-  dataUrl: string | null;
   rawImage: RawImage | null;
 }
 
-const WorkerContext = createContext<{ send: (event: WorkerEvent) => void } | null>(null);
+const WorkerContext = createContext<{
+  actor: Actor<any>
+  send: (event: WorkerEvent) => void
+} | null>(null);
 
 const workerMachine = setup({
   types: {
-    events: {} as WorkerEvent
+    events: {} as WorkerEvent,
+    context: {} as WorkerContext
   },
   actions: {
     start: () => {
@@ -40,6 +43,9 @@ const workerMachine = setup({
 }).createMachine({
   id: 'worker',
   initial: 'idle',
+  context: {
+    rawImage: null,
+  },
   states: {
     idle: {
       on: {
@@ -63,19 +69,15 @@ const workerMachine = setup({
 export const WorkerProvider = ({children}: { children: React.ReactNode }) => {
   const worker = use(workerPromise);
 
-  const [, send] = useMachine(workerMachine.provide({
+  const [, send, actor] = useMachine(workerMachine.provide({
     actions: {
-      start: assign({
-        dataUrl: ({event}) => {
-          if (event.type !== 'start' || !event.dataUrl) {
-            throw new Error('Invalid event type or missing dataUrl');
-          }
-          console.log('Sending dataUrl to worker:', event.dataUrl);
-          worker.postMessage({type: 'depth', data: event.dataUrl});
-          return event.dataUrl
+      start: ({event}) => {
+        if (event.type !== 'start' || !event.dataUrl) {
+          throw new Error('Invalid event type or missing dataUrl');
         }
-      })
-      ,
+        console.log('Sending dataUrl to worker:', event.dataUrl);
+        worker.postMessage({type: 'depth', data: event.dataUrl});
+      },
       finish: assign({
         rawImage: ({event}) => {
           if (event.type !== 'finish' || !event.rawImage) {
@@ -110,7 +112,7 @@ export const WorkerProvider = ({children}: { children: React.ReactNode }) => {
   });
 
   return (
-    <WorkerContext.Provider value={{send}}>
+    <WorkerContext.Provider value={{actor, send}}>
       {children}
     </WorkerContext.Provider>
   );

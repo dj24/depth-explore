@@ -7,20 +7,10 @@ export const useRenderVideoToCanvas = () => {
     if (!video) return;
     if (!canvasRef.current) return;
 
-    console.log({videoRef: video, canvasRef: canvasRef.current});
-
     const canvas = canvasRef.current;
     const context = canvas.getContext('2d');
 
-    console.log({video, canvas, context});
-
     if (!context) return;
-
-    video.addEventListener('loadedmetadata', (event) => {
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      console.log(video.videoWidth);
-    });
 
     let animationId: number;
 
@@ -39,9 +29,14 @@ export const useRenderVideoToCanvas = () => {
       cancelAnimationFrame(animationId);
     }
 
-    // Start rendering when video is ready and playing
+    video.addEventListener('loadedmetadata', () => {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+    });
     video.addEventListener('play', startRendering);
+    video.addEventListener('seeked', startRendering);
     video.addEventListener('pause', stopRendering);
+    video.addEventListener('ended', stopRendering);
   }, [canvasRef]);
 
   return {canvasRef, videoRef};
