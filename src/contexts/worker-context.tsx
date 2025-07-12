@@ -1,10 +1,11 @@
 "use client";
 
-import { createContext, use } from "react";
-import { assign, setup } from "xstate";
+import { createContext, ReactNode, use } from "react";
+import { assign } from "xstate";
 import { useActorRef, useSelector } from "@xstate/react";
 import { match, P } from "ts-pattern";
 import { RawImage } from "@huggingface/transformers";
+import { WorkerEvent, workerMachine } from "@/machines/worker-machine";
 
 const workerPromise: Promise<Worker> = new Promise((resolve) => {
   const worker = new Worker(new URL("../workers/worker.js", import.meta.url), {
@@ -18,11 +19,8 @@ const workerPromise: Promise<Worker> = new Promise((resolve) => {
   });
 });
 
-type WorkerStartEvent = { type: "start"; blob: Blob };
-type WorkerFinishEvent = { type: "finish"; rawImage: { data: RawImage } };
-type WorkerEvent = WorkerStartEvent | WorkerFinishEvent;
-type WorkerContext = {
-  rawImage: RawImage | null;
+const selectRawImage = (state: any) => {
+  return state.context.rawImage;
 };
 
 const WorkerContext = createContext<{
@@ -30,46 +28,7 @@ const WorkerContext = createContext<{
   send: (event: WorkerEvent) => void;
 } | null>(null);
 
-const workerMachine = setup({
-  types: {
-    events: {} as WorkerEvent,
-    context: {} as WorkerContext,
-  },
-  actions: {
-    start: () => {},
-    finish: () => {},
-  },
-}).createMachine({
-  id: "worker",
-  initial: "idle",
-  context: {
-    rawImage: null,
-  },
-  states: {
-    idle: {
-      on: {
-        start: {
-          target: "processing",
-          actions: "start",
-        },
-      },
-    },
-    processing: {
-      on: {
-        finish: {
-          target: "idle",
-          actions: "finish",
-        },
-      },
-    },
-  },
-});
-
-const selectRawImage = (state: any) => {
-  return state.context.rawImage;
-};
-
-export const WorkerProvider = ({ children }: { children: React.ReactNode }) => {
+export const WorkerProvider = ({ children }: { children: ReactNode }) => {
   const worker = use(workerPromise);
 
   const actor = useActorRef(
