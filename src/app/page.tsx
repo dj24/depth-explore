@@ -1,16 +1,9 @@
 "use client";
 
-import React, {
-  Suspense,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-} from "react";
+import React, { Suspense, useCallback, useRef } from "react";
 import styles from "./page.module.css";
 import { useWorkerContext, WorkerProvider } from "@/contexts/worker-context";
 import { useVideoUpload } from "@/hooks/use-video-upload";
-import { useRenderVideoToCanvas } from "@/hooks/use-render-video-to-canvas";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 
@@ -38,7 +31,7 @@ const PointCloud = ({
           itemSize={3}
         />
       </bufferGeometry>
-      <pointsMaterial size={0.1} vertexColors={true} />
+      <pointsMaterial size={0.2} vertexColors={true} />
     </points>
   );
 };
@@ -46,16 +39,13 @@ const PointCloud = ({
 const Foo = () => {
   const { positions, colors, send } = useWorkerContext();
   const { videoSrc, handleVideoUpload } = useVideoUpload();
-  const { videoRef, renderFrame } = useRenderVideoToCanvas();
-  const outputCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
 
-  // TODO: Send the video element and create the blob in the state machine instead
-  const handleSendFrame = useCallback(async () => {
-    const blob = await renderFrame(videoRef.current);
-    if (blob) {
+  const handleSendFrame = useCallback(() => {
+    if (videoRef.current) {
       send({
         type: "start",
-        blob,
+        video: videoRef.current,
       });
     }
   }, [send]);
@@ -79,21 +69,20 @@ const Foo = () => {
               const aspectRatio = video.videoWidth / video.videoHeight;
               video.style.aspectRatio = `${aspectRatio} / 1`;
             }}
-            style={{ width: 960 }}
+            style={{ width: 640 }}
             ref={videoRef}
             src={videoSrc}
             controls
           />
         )}
         <Canvas
-          camera={{ fov: 40 }}
+          camera={{ fov: 15 }}
           style={{
-            width: 960,
+            width: 1280,
             aspectRatio: "16 / 9",
             border: "1px solid black",
           }}
         >
-          <ambientLight />
           <OrbitControls makeDefault />
           {positions && colors && (
             <PointCloud colors={colors} positions={positions} />

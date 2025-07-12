@@ -1,12 +1,12 @@
 "use client";
 
 import { createContext, ReactNode, use } from "react";
-import { assign } from "xstate";
 import { useActorRef, useSelector } from "@xstate/react";
 import { match, P } from "ts-pattern";
+import { assign } from "xstate";
 import { WorkerEvent, workerMachine } from "@/machines/worker-machine";
-import { createPointCloudPositionsFromRawImage } from "@/helpers/create-point-cloud-positions-from-raw-image";
-import { createPointCloudColorsFromRawImage } from "@/helpers/create-point-cloud-colors-from-image-data";
+import { renderVideoFrame } from "@/helpers/render-video-frame";
+import { createPointCloudColorsFromImageData } from "@/helpers/create-point-cloud-colors-from-image-data";
 
 const workerPromise: Promise<Worker> = new Promise((resolve) => {
   const worker = new Worker(new URL("../workers/worker.js", import.meta.url), {
@@ -41,15 +41,21 @@ export const WorkerProvider = ({ children }: { children: ReactNode }) => {
     workerMachine.provide({
       actions: {
         start: ({ event }) => {
-          match(event)
-            .with({ type: "start", blob: P.nonNullable }, ({ blob }) =>
-              worker.postMessage({ type: "depth", data: blob }),
-            )
-            .otherwise(() => {
-              throw new Error(
-                `Invalid event type: ${event.type} or missing blob`,
-              );
-            });
+          return match(event).with(
+            { type: "start", video: P.nonNullable },
+            ({ video }) => {
+              renderVideoFrame(video).then(({ blob, imageData }) => {
+                worker.postMessage({
+                  type: "depth",
+                  data: blob,
+                });
+                actor.send({
+                  type: "assignColors",
+                  colors: createPointCloudColorsFromImageData(imageData),
+                });
+              });
+            },
+          );
         },
       },
     }),
@@ -61,7 +67,7 @@ export const WorkerProvider = ({ children }: { children: ReactNode }) => {
   worker.addEventListener("message", (event: MessageEvent<any>) => {
     match(event.data)
       .with({ type: "depth_result" }, () => {
-        actor.send({ type: "finish", rawImage: event.data });
+        actor.send({ type: "assignDepth", rawImage: event.data });
       })
       .with({ type: P.string }, (data) => {
         console.warn(`Unknown message type: ${data.type}`);

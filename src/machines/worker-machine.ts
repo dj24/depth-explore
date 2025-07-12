@@ -2,23 +2,26 @@ import { assign, setup } from "xstate";
 import { RawImage } from "@huggingface/transformers";
 import { match, P } from "ts-pattern";
 import { createPointCloudPositionsFromRawImage } from "@/helpers/create-point-cloud-positions-from-raw-image";
-import { createPointCloudColorsFromRawImage } from "@/helpers/create-point-cloud-colors-from-image-data";
 
-export type WorkerStartEvent = { type: "start"; blob: Blob };
-export type WorkerFinishEvent = {
-  type: "finish";
+export type WorkerStartEvent = { type: "start"; video: HTMLVideoElement };
+export type AssignDepthEvent = {
+  type: "assignDepth";
   rawImage: { data: RawImage };
 };
-type PopulatedWorkerContext = {
-  positions: Float16Array;
+export type AssignColorsEvent = {
+  type: "assignColors";
   colors: Uint8Array;
 };
-type EmptyWorkerContext = {
-  positions: null;
-  colors: null;
+
+export type WorkerEvent =
+  | WorkerStartEvent
+  | AssignDepthEvent
+  | AssignColorsEvent;
+
+export type WorkerContext = {
+  positions: Float16Array | null;
+  colors: Uint8Array | null;
 };
-export type WorkerEvent = WorkerStartEvent | WorkerFinishEvent;
-export type WorkerContext = PopulatedWorkerContext | EmptyWorkerContext;
 
 export const workerMachine = setup({
   types: {
@@ -27,22 +30,28 @@ export const workerMachine = setup({
   },
   actions: {
     start: () => {},
-    finish: assign({
-      positions: ({ event }) => {
+    assignColors: assign({
+      colors: ({ event }) => {
         return match(event)
-          .with({ type: "finish", rawImage: P.nonNullable }, ({ rawImage }) =>
-            createPointCloudPositionsFromRawImage(rawImage.data),
+          .with(
+            { type: "assignColors", colors: P.nonNullable },
+            ({ colors }) => colors,
           )
           .otherwise(() => {
             throw new Error(
-              `Invalid event type: ${event.type} or missing rawImage`,
+              `Invalid event type: ${event.type} or missing colors`,
             );
           });
       },
-      colors: ({ event }) => {
+    }),
+    assignDepth: assign({
+      positions: ({ event }) => {
         return match(event)
-          .with({ type: "finish", rawImage: P.nonNullable }, ({ rawImage }) =>
-            createPointCloudColorsFromRawImage(rawImage.data),
+          .with(
+            { type: "assignDepth", rawImage: P.nonNullable },
+            ({ rawImage }) => {
+              return createPointCloudPositionsFromRawImage(rawImage.data);
+            },
           )
           .otherwise(() => {
             throw new Error(
@@ -63,16 +72,24 @@ export const workerMachine = setup({
     idle: {
       on: {
         start: {
-          target: "processing",
+          target: "waitingForColorData",
           actions: "start",
         },
       },
     },
-    processing: {
+    waitingForColorData: {
       on: {
-        finish: {
+        assignColors: {
+          target: "waitingForDepthData",
+          actions: "assignColors",
+        },
+      },
+    },
+    waitingForDepthData: {
+      on: {
+        assignDepth: {
           target: "idle",
-          actions: "finish",
+          actions: "assignDepth",
         },
       },
     },
