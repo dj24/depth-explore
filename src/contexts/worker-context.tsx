@@ -29,7 +29,7 @@ const selectColors = (state: any) => {
 };
 
 const WorkerContext = createContext<{
-  positions: Float16Array | null;
+  positions: Float32Array | null;
   colors: Uint8Array | null;
   send: (event: WorkerEvent) => void;
 } | null>(null);
@@ -63,6 +63,8 @@ export const WorkerProvider = ({ children }: { children: ReactNode }) => {
 
   const positions = useSelector(actor, selectPositions);
   const colors = useSelector(actor, selectColors);
+
+  console.log({ positions, colors });
 
   worker.addEventListener("message", (event: MessageEvent<any>) => {
     match(event.data)

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { Suspense, useCallback, useRef } from "react";
+import React, { Suspense, useCallback, useEffect, useRef } from "react";
 import styles from "./page.module.css";
 import { useWorkerContext, WorkerProvider } from "@/contexts/worker-context";
 import { useVideoUpload } from "@/hooks/use-video-upload";
@@ -11,11 +11,11 @@ const PointCloud = ({
   positions,
   colors,
 }: {
-  positions: Float16Array;
+  positions: Float32Array;
   colors: Uint8Array;
 }) => {
   return (
-    <points>
+    <points key={`${positions.length}-${colors.length}`}>
       <bufferGeometry>
         <bufferAttribute
           attach="attributes-position"

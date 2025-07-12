@@ -19,7 +19,7 @@ export type WorkerEvent =
   | AssignColorsEvent;
 
 export type WorkerContext = {
-  positions: Float16Array | null;
+  positions: Float32Array | null;
   colors: Uint8Array | null;
 };
 
@@ -60,6 +60,10 @@ export const workerMachine = setup({
           });
       },
     }),
+    resetContext: assign({
+      positions: (_ctx, _event) => null,
+      colors: (_ctx, _event) => null,
+    }),
   },
 }).createMachine({
   id: "worker",
@@ -73,7 +77,7 @@ export const workerMachine = setup({
       on: {
         start: {
           target: "waitingForColorData",
-          actions: "start",
+          actions: ["resetContext", "start"],
         },
       },
     },
@@ -90,6 +94,14 @@ export const workerMachine = setup({
         assignDepth: {
           target: "idle",
           actions: "assignDepth",
+        },
+      },
+    },
+    finished: {
+      on: {
+        start: {
+          target: "waitingForColorData",
+          actions: ["resetContext", "start"],
         },
       },
     },

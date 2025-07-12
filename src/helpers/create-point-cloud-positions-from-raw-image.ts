@@ -4,8 +4,8 @@ const Z_SCALE = 3.0;
 
 export const createPointCloudPositionsFromRawImage = (
   rawImage: RawImage,
-): Float16Array => {
-  const positions = new Float16Array(rawImage.data.length * 3);
+): Float32Array => {
+  const positions = new Float32Array(rawImage.data.length * 3);
   const aspectRatio = rawImage.width / rawImage.height;
   for (let i = 0; i < rawImage.data.length; ++i) {
     const x = i % rawImage.width;
