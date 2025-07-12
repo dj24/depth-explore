@@ -1,48 +1,47 @@
-'use client'
+"use client";
 
-import {createContext, use} from 'react';
-import {Actor, ActorRef, assign, MachineSnapshot, setup, StateMachine} from "xstate";
-import {useMachine} from "@xstate/react";
-import {match, P} from "ts-pattern";
-import {RawImage} from '@huggingface/transformers';
+import { createContext, use } from "react";
+import { assign, setup } from "xstate";
+import { useActorRef, useSelector } from "@xstate/react";
+import { match, P } from "ts-pattern";
+import { RawImage } from "@huggingface/transformers";
 
-const workerPromise: Promise<Worker> = new Promise(resolve => {
-  const worker = new Worker(new URL('../workers/worker.js', import.meta.url), {type: 'module'});
-  worker.postMessage({type: 'ping'});
-  worker.addEventListener('message', (event) => {
-    if (event.data.type === 'pong') {
+const workerPromise: Promise<Worker> = new Promise((resolve) => {
+  const worker = new Worker(new URL("../workers/worker.js", import.meta.url), {
+    type: "module",
+  });
+  worker.postMessage({ type: "ping" });
+  worker.addEventListener("message", (event) => {
+    if (event.data.type === "pong") {
       resolve(worker);
     }
   });
 });
 
-
-type WorkerStartEvent = { type: 'start'; dataUrl: string };
-type WorkerFinishEvent = { type: 'finish'; rawImage: RawImage };
-type WorkerEvent = WorkerStartEvent | WorkerFinishEvent
+type WorkerStartEvent = { type: "start"; blob: Blob };
+type WorkerFinishEvent = { type: "finish"; rawImage: { data: RawImage } };
+type WorkerEvent = WorkerStartEvent | WorkerFinishEvent;
 type WorkerContext = {
   rawImage: RawImage | null;
-}
+};
 
 const WorkerContext = createContext<{
-  actor: Actor<StateMachine<WorkerContext, WorkerEvent, any, any, any, any, any, any, any, any, any, any, any, any>>
-  send: (event: WorkerEvent) => void
+  rawImage: RawImage | null;
+  send: (event: WorkerEvent) => void;
 } | null>(null);
 
 const workerMachine = setup({
   types: {
     events: {} as WorkerEvent,
-    context: {} as WorkerContext
+    context: {} as WorkerContext,
   },
   actions: {
-    start: () => {
-    },
-    finish: () => {
-    }
-  }
+    start: () => {},
+    finish: () => {},
+  },
 }).createMachine({
-  id: 'worker',
-  initial: 'idle',
+  id: "worker",
+  initial: "idle",
   context: {
     rawImage: null,
   },
@@ -50,80 +49,96 @@ const workerMachine = setup({
     idle: {
       on: {
         start: {
-          target: 'processing',
-          actions: 'start',
+          target: "processing",
+          actions: "start",
         },
       },
     },
     processing: {
       on: {
         finish: {
-          target: 'idle',
-          actions: 'finish',
+          target: "idle",
+          actions: "finish",
         },
       },
     },
   },
-})
+});
 
-export const WorkerProvider = ({children}: { children: React.ReactNode }) => {
+const selectRawImage = (state: any) => {
+  return state.context.rawImage;
+};
+
+export const WorkerProvider = ({ children }: { children: React.ReactNode }) => {
   const worker = use(workerPromise);
 
-  const [, send, actor] = useMachine(workerMachine.provide({
-    actions: {
-      start: ({event}) => {
-        if (event.type !== 'start' || !event.dataUrl) {
-          throw new Error('Invalid event type or missing dataUrl');
-        }
-        console.log('Sending dataUrl to worker:', event.dataUrl);
-        worker.postMessage({type: 'depth', data: event.dataUrl});
-      },
-      finish: assign({
-        rawImage: ({event}) => {
-          if (event.type !== 'finish' || !event.rawImage) {
-            throw new Error('Invalid event type or missing rawImage');
+  const actor = useActorRef(
+    workerMachine.provide({
+      actions: {
+        start: ({ event }) => {
+          if (event.type !== "start" || !event.blob) {
+            throw new Error("Invalid event type or missing blob");
           }
-          console.log('Received rawImage from worker:', event.rawImage);
-          return event.rawImage
-        }
-      })
-    }
-  }));
+          console.log("Sending dataUrl to worker:", event.blob);
+          worker.postMessage({ type: "depth", data: event.blob });
+        },
+        finish: assign({
+          rawImage: ({ event }) => {
+            return match(event)
+              .with(
+                { type: "finish", rawImage: P.nonNullable },
+                ({ rawImage }) => {
+                  console.log("Received rawImage from worker:", rawImage.data);
+                  return rawImage.data;
+                },
+              )
+              .otherwise(() => {
+                throw new Error("Invalid event type or missing rawImage");
+              });
+          },
+        }),
+      },
+    }),
+  );
 
-  worker.addEventListener('message', (event: MessageEvent<any>) => {
+  const { send } = actor;
+  const rawImage = useSelector(actor, selectRawImage);
+
+  worker.addEventListener("message", (event: MessageEvent<any>) => {
     match(event.data)
-      .with({type: 'ping'}, () => {
-        worker.postMessage({type: 'pong'});
+      .with({ type: "ping" }, () => {
+        worker.postMessage({ type: "pong" });
       })
-      .with({type: 'pong'}, () => {
-        console.log('Worker is ready');
+      .with({ type: "pong" }, () => {
+        console.log("Worker is ready");
       })
-      .with({type: 'depth_result'}, () => {
-        const {data} = event;
-        const depthImage = new RawImage(data.data, data.width, data.height, data.channels)
-        send({type: 'finish', rawImage: depthImage});
+      .with({ type: "depth_result" }, () => {
+        const { data } = event;
+        send({ type: "finish", rawImage: data });
       })
-      .with({type: 'error'}, (error) => {
-        console.error('Worker error:', error);
+      .with({ type: "error" }, (error) => {
+        console.error("Worker error:", error);
       })
-      .with({type: P.string}, (data) => {
+      .with({ type: P.string }, (data) => {
         console.warn(`Unknown message type: ${data.type}`);
       });
   });
 
   return (
-    <WorkerContext.Provider value={{actor, send}}>
+    <WorkerContext.Provider value={{ rawImage, send }}>
       {children}
     </WorkerContext.Provider>
   );
-}
+};
 
 export const useWorkerContext = () => {
   const value = use(WorkerContext);
 
   if (!value) {
-    throw new Error('Worker context is not available. Make sure to wrap your component tree with WorkerContextProvider.');
+    throw new Error(
+      "Worker context is not available. Make sure to wrap your component tree with WorkerContextProvider.",
+    );
   }
 
   return value;
-}
+};
