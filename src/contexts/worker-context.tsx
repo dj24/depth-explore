@@ -76,26 +76,28 @@ export const WorkerProvider = ({ children }: { children: React.ReactNode }) => {
     workerMachine.provide({
       actions: {
         start: ({ event }) => {
-          if (event.type !== "start" || !event.blob) {
-            throw new Error("Invalid event type or missing blob");
-          }
-          console.log("Sending dataUrl to worker:", event.blob);
-          worker.postMessage({ type: "depth", data: event.blob });
+          match(event)
+            .with({ type: "start", blob: P.nonNullable }, ({ blob }) =>
+              worker.postMessage({ type: "depth", data: blob }),
+            )
+            .otherwise(() => {
+              throw new Error(
+                `Invalid event type: ${event.type} or missing blob`,
+              );
+            });
         },
         finish: assign({
-          rawImage: ({ event }) => {
-            return match(event)
+          rawImage: ({ event }) =>
+            match(event)
               .with(
                 { type: "finish", rawImage: P.nonNullable },
-                ({ rawImage }) => {
-                  console.log("Received rawImage from worker:", rawImage.data);
-                  return rawImage.data;
-                },
+                ({ rawImage }) => rawImage.data,
               )
               .otherwise(() => {
-                throw new Error("Invalid event type or missing rawImage");
-              });
-          },
+                throw new Error(
+                  `Invalid event type: ${event.type} or missing rawImage`,
+                );
+              }),
         }),
       },
     }),
@@ -106,18 +108,8 @@ export const WorkerProvider = ({ children }: { children: React.ReactNode }) => {
 
   worker.addEventListener("message", (event: MessageEvent<any>) => {
     match(event.data)
-      .with({ type: "ping" }, () => {
-        worker.postMessage({ type: "pong" });
-      })
-      .with({ type: "pong" }, () => {
-        console.log("Worker is ready");
-      })
       .with({ type: "depth_result" }, () => {
-        const { data } = event;
-        send({ type: "finish", rawImage: data });
-      })
-      .with({ type: "error" }, (error) => {
-        console.error("Worker error:", error);
+        send({ type: "finish", rawImage: event.data });
       })
       .with({ type: P.string }, (data) => {
         console.warn(`Unknown message type: ${data.type}`);
