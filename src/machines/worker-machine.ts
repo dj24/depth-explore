@@ -1,5 +1,8 @@
-import { setup } from "xstate";
+import { assign, setup } from "xstate";
 import { RawImage } from "@huggingface/transformers";
+import { match, P } from "ts-pattern";
+import { createPointCloudPositionsFromRawImage } from "@/helpers/create-point-cloud-positions-from-raw-image";
+import { createPointCloudColorsFromRawImage } from "@/helpers/create-point-cloud-colors-from-image-data";
 
 export type WorkerStartEvent = { type: "start"; blob: Blob };
 export type WorkerFinishEvent = {
@@ -24,7 +27,30 @@ export const workerMachine = setup({
   },
   actions: {
     start: () => {},
-    finish: () => {},
+    finish: assign({
+      positions: ({ event }) => {
+        return match(event)
+          .with({ type: "finish", rawImage: P.nonNullable }, ({ rawImage }) =>
+            createPointCloudPositionsFromRawImage(rawImage.data),
+          )
+          .otherwise(() => {
+            throw new Error(
+              `Invalid event type: ${event.type} or missing rawImage`,
+            );
+          });
+      },
+      colors: ({ event }) => {
+        return match(event)
+          .with({ type: "finish", rawImage: P.nonNullable }, ({ rawImage }) =>
+            createPointCloudColorsFromRawImage(rawImage.data),
+          )
+          .otherwise(() => {
+            throw new Error(
+              `Invalid event type: ${event.type} or missing rawImage`,
+            );
+          });
+      },
+    }),
   },
 }).createMachine({
   id: "worker",

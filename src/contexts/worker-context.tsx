@@ -51,46 +51,17 @@ export const WorkerProvider = ({ children }: { children: ReactNode }) => {
               );
             });
         },
-        finish: assign({
-          positions: ({ event }) => {
-            return match(event)
-              .with(
-                { type: "finish", rawImage: P.nonNullable },
-                ({ rawImage }) =>
-                  createPointCloudPositionsFromRawImage(rawImage.data),
-              )
-              .otherwise(() => {
-                throw new Error(
-                  `Invalid event type: ${event.type} or missing rawImage`,
-                );
-              });
-          },
-          colors: ({ event }) => {
-            return match(event)
-              .with(
-                { type: "finish", rawImage: P.nonNullable },
-                ({ rawImage }) =>
-                  createPointCloudColorsFromRawImage(rawImage.data),
-              )
-              .otherwise(() => {
-                throw new Error(
-                  `Invalid event type: ${event.type} or missing rawImage`,
-                );
-              });
-          },
-        }),
       },
     }),
   );
 
-  const { send } = actor;
   const positions = useSelector(actor, selectPositions);
   const colors = useSelector(actor, selectColors);
 
   worker.addEventListener("message", (event: MessageEvent<any>) => {
     match(event.data)
       .with({ type: "depth_result" }, () => {
-        send({ type: "finish", rawImage: event.data });
+        actor.send({ type: "finish", rawImage: event.data });
       })
       .with({ type: P.string }, (data) => {
         console.warn(`Unknown message type: ${data.type}`);
@@ -98,7 +69,7 @@ export const WorkerProvider = ({ children }: { children: ReactNode }) => {
   });
 
   return (
-    <WorkerContext.Provider value={{ positions, colors, send }}>
+    <WorkerContext.Provider value={{ positions, colors, send: actor.send }}>
       {children}
     </WorkerContext.Provider>
   );
