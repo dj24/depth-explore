@@ -1,7 +1,7 @@
 'use client'
 
-import {createContext, use} from 'react';
-import { setup} from "xstate";
+import {createContext, use, useEffect} from 'react';
+import {assign, setup} from "xstate";
 import {useMachine} from "@xstate/react";
 import {match, P} from "ts-pattern";
 import {RawImage} from '@huggingface/transformers';
@@ -17,46 +17,45 @@ const workerPromise: Promise<Worker> = new Promise(resolve => {
 });
 
 
-type WorkerMachineContext = { dataUrl: string | null, rawImage: RawImage | null };
 type WorkerStartEvent = { type: 'start'; dataUrl: string };
 type WorkerFinishEvent = { type: 'finish'; rawImage: RawImage };
 type WorkerEvent = WorkerStartEvent | WorkerFinishEvent
+type WorkerContext = {
+  dataUrl: string | null;
+  rawImage: RawImage | null;
+}
 
-const WorkerContext = createContext<{ send: (event: WorkerEvent) => void  } | null>(null);
+const WorkerContext = createContext<{ send: (event: WorkerEvent) => void } | null>(null);
 
-// Handles worker messages
 const workerMachine = setup({
   types: {
-    context: {} as WorkerMachineContext,
-    events: {} as WorkerEvent,
+    events: {} as WorkerEvent
+  },
+  actions: {
+    start: () => {
+    },
+    finish: () => {
+    }
   }
 }).createMachine({
   id: 'worker',
   initial: 'idle',
-  context: {
-    dataUrl: null,
-    rawImage: null
-  },
   states: {
     idle: {
       on: {
         start: {
           target: 'processing',
-          actions: () => {
-            console.log('worker started')
-          }
-        }
-      }
+          actions: 'start',
+        },
+      },
     },
     processing: {
       on: {
         finish: {
           target: 'idle',
-          actions: () => {
-            console.log('worker finished processing');
-          }
+          actions: 'finish',
         },
-      }
+      },
     },
   },
 })
@@ -64,9 +63,32 @@ const workerMachine = setup({
 export const WorkerProvider = ({children}: { children: React.ReactNode }) => {
   const worker = use(workerPromise);
 
-  const [, send] = useMachine(workerMachine);
+  const [, send] = useMachine(workerMachine.provide({
+    actions: {
+      start: assign({
+        dataUrl: ({event}) => {
+          if (event.type !== 'start' || !event.dataUrl) {
+            throw new Error('Invalid event type or missing dataUrl');
+          }
+          console.log('Sending dataUrl to worker:', event.dataUrl);
+          worker.postMessage({type: 'depth', data: event.dataUrl});
+          return event.dataUrl
+        }
+      })
+      ,
+      finish: assign({
+        rawImage: ({event}) => {
+          if (event.type !== 'finish' || !event.rawImage) {
+            throw new Error('Invalid event type or missing rawImage');
+          }
+          console.log('Received rawImage from worker:', event.rawImage);
+          return event.rawImage
+        }
+      })
+    }
+  }));
 
-  worker.addEventListener('message', (event: MessageEvent<unknown>) => {
+  worker.addEventListener('message', (event: MessageEvent<any>) => {
     match(event.data)
       .with({type: 'ping'}, () => {
         worker.postMessage({type: 'pong'});
@@ -76,7 +98,8 @@ export const WorkerProvider = ({children}: { children: React.ReactNode }) => {
       })
       .with({type: 'depth_result'}, () => {
         const {data} = event;
-        console.log('Received depth result:', data);
+        const depthImage = new RawImage(data.data, data.width, data.height, data.channels)
+        send({type: 'finish', rawImage: depthImage});
       })
       .with({type: 'error'}, (error) => {
         console.error('Worker error:', error);

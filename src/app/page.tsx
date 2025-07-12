@@ -1,48 +1,46 @@
 "use client";
 
-import React, {Suspense, useEffect} from "react";
+import React, {Suspense, useCallback, useEffect, useRef} from "react";
 import styles from "./page.module.css";
 import {Canvas} from "@react-three/fiber";
-import {WorkerProvider} from "@/contexts/worker-context";
+import {useWorkerContext, WorkerProvider} from "@/contexts/worker-context";
 import {useVideoUpload} from "@/hooks/use-video-upload";
 import {Box} from "@/components/box";
+import {RawImage} from "@huggingface/transformers";
+import {useRenderVideoToCanvas} from "@/hooks/use-render-video-to-canvas";
 
+const Foo = () => {
+  const {send} = useWorkerContext();
 
-const useRenderVideoToCanvas = ({videoRef, canvasRef}: {
-  videoRef: React.RefObject<HTMLVideoElement | null>,
-  canvasRef: React.RefObject<HTMLCanvasElement | null>
-}) => {
-  useEffect(() => {
-    if (!videoRef.current || !canvasRef.current) return;
-
-    const video = videoRef.current;
-    const context = canvasRef.current.getContext('2d');
-    if (!context) return;
-
-    const renderFrame = () => {
-      if (!videoRef.current || !canvasRef.current) return;
-      context.drawImage(video, 0, 0, canvasRef.current.width, canvasRef.current.height);
-      requestAnimationFrame(renderFrame);
-    };
-
-    video.addEventListener('play', renderFrame);
-
-    return () => {
-      video.removeEventListener('play', renderFrame);
-    };
-  }, [videoRef, canvasRef]);
+  return (
+    <>
+      <button onClick={() => {
+        send({
+          type: 'start',
+          dataUrl: 'https://example.com/video.mp4' // Replace with actual video URL or data URL
+        })
+      }}>START
+      </button>
+      <button onClick={() => {
+        send({
+          type: 'finish',
+          rawImage: new RawImage(new Uint8Array(), 2, 2, 1), // Replace with actual video URL or data URL
+        })
+      }}>START
+      </button>
+    </>
+  )
 }
 
 export default function Home() {
-  const {videoRef, handleVideoUpload} = useVideoUpload();
-  const canvasRef = React.useRef<HTMLCanvasElement>(null);
-  useRenderVideoToCanvas({videoRef, canvasRef});
+  const {videoSrc, handleVideoUpload} = useVideoUpload();
+  const {canvasRef, videoRef} = useRenderVideoToCanvas();
 
   return (
     <Suspense fallback={<div>Loading...</div>}>
       <WorkerProvider>
         <div className={styles.page}>
-
+          <Foo/>
           <label htmlFor="video-upload">
             Upload Video
           </label>
@@ -53,13 +51,14 @@ export default function Home() {
             onChange={handleVideoUpload}
             className={styles.hiddenInput}
           />
-          <video
-            ref={videoRef}
-            controls
-            width="800px"
-            height="auto"
-          />
-          <canvas style={{width: 400, height: 300, border: '1px solid blue'}} ref={canvasRef}/>
+          {videoSrc && <video
+              ref={videoRef}
+              src={videoSrc}
+              controls
+              width="800px"
+              height="auto"
+          />}
+          <canvas width={200} height={200} style={{width: 400, height: 300, border: '1px solid blue'}} ref={canvasRef}/>
           <Canvas style={{
             width: 800,
             height: 800,
@@ -72,5 +71,6 @@ export default function Home() {
         </div>
       </WorkerProvider>
     </Suspense>
-  );
+  )
+    ;
 }
