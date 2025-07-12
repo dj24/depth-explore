@@ -1,7 +1,7 @@
 'use client'
 
 import {createContext, use} from 'react';
-import {Actor, ActorRef, assign, MachineSnapshot, setup} from "xstate";
+import {Actor, ActorRef, assign, MachineSnapshot, setup, StateMachine} from "xstate";
 import {useMachine} from "@xstate/react";
 import {match, P} from "ts-pattern";
 import {RawImage} from '@huggingface/transformers';
@@ -25,7 +25,7 @@ type WorkerContext = {
 }
 
 const WorkerContext = createContext<{
-  actor: Actor<any>
+  actor: Actor<StateMachine<WorkerContext, WorkerEvent, any, any, any, any, any, any, any, any, any, any, any, any>>
   send: (event: WorkerEvent) => void
 } | null>(null);
 
