@@ -6,10 +6,16 @@ export type WorkerFinishEvent = {
   type: "finish";
   rawImage: { data: RawImage };
 };
-export type WorkerEvent = WorkerStartEvent | WorkerFinishEvent;
-export type WorkerContext = {
-  rawImage: RawImage | null;
+type PopulatedWorkerContext = {
+  positions: Float16Array;
+  colors: Uint8Array;
 };
+type EmptyWorkerContext = {
+  positions: null;
+  colors: null;
+};
+export type WorkerEvent = WorkerStartEvent | WorkerFinishEvent;
+export type WorkerContext = PopulatedWorkerContext | EmptyWorkerContext;
 
 export const workerMachine = setup({
   types: {
@@ -24,7 +30,8 @@ export const workerMachine = setup({
   id: "worker",
   initial: "idle",
   context: {
-    rawImage: null,
+    positions: null,
+    colors: null,
   },
   states: {
     idle: {

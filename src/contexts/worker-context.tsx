@@ -4,8 +4,9 @@ import { createContext, ReactNode, use } from "react";
 import { assign } from "xstate";
 import { useActorRef, useSelector } from "@xstate/react";
 import { match, P } from "ts-pattern";
-import { RawImage } from "@huggingface/transformers";
 import { WorkerEvent, workerMachine } from "@/machines/worker-machine";
+import { createPointCloudPositionsFromRawImage } from "@/helpers/create-point-cloud-positions-from-raw-image";
+import { createPointCloudColorsFromRawImage } from "@/helpers/create-point-cloud-colors-from-image-data";
 
 const workerPromise: Promise<Worker> = new Promise((resolve) => {
   const worker = new Worker(new URL("../workers/worker.js", import.meta.url), {
@@ -19,12 +20,17 @@ const workerPromise: Promise<Worker> = new Promise((resolve) => {
   });
 });
 
-const selectRawImage = (state: any) => {
-  return state.context.rawImage;
+const selectPositions = (state: any) => {
+  return state.context.positions;
+};
+
+const selectColors = (state: any) => {
+  return state.context.colors;
 };
 
 const WorkerContext = createContext<{
-  rawImage: RawImage | null;
+  positions: Float16Array | null;
+  colors: Uint8Array | null;
   send: (event: WorkerEvent) => void;
 } | null>(null);
 
@@ -46,24 +52,40 @@ export const WorkerProvider = ({ children }: { children: ReactNode }) => {
             });
         },
         finish: assign({
-          rawImage: ({ event }) =>
-            match(event)
+          positions: ({ event }) => {
+            return match(event)
               .with(
                 { type: "finish", rawImage: P.nonNullable },
-                ({ rawImage }) => rawImage.data,
+                ({ rawImage }) =>
+                  createPointCloudPositionsFromRawImage(rawImage.data),
               )
               .otherwise(() => {
                 throw new Error(
                   `Invalid event type: ${event.type} or missing rawImage`,
                 );
-              }),
+              });
+          },
+          colors: ({ event }) => {
+            return match(event)
+              .with(
+                { type: "finish", rawImage: P.nonNullable },
+                ({ rawImage }) =>
+                  createPointCloudColorsFromRawImage(rawImage.data),
+              )
+              .otherwise(() => {
+                throw new Error(
+                  `Invalid event type: ${event.type} or missing rawImage`,
+                );
+              });
+          },
         }),
       },
     }),
   );
 
   const { send } = actor;
-  const rawImage = useSelector(actor, selectRawImage);
+  const positions = useSelector(actor, selectPositions);
+  const colors = useSelector(actor, selectColors);
 
   worker.addEventListener("message", (event: MessageEvent<any>) => {
     match(event.data)
@@ -76,7 +98,7 @@ export const WorkerProvider = ({ children }: { children: ReactNode }) => {
   });
 
   return (
-    <WorkerContext.Provider value={{ rawImage, send }}>
+    <WorkerContext.Provider value={{ positions, colors, send }}>
       {children}
     </WorkerContext.Provider>
   );
