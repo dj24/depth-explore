@@ -1,40 +1,12 @@
 "use client";
 
-import React, { Suspense, useCallback, useEffect, useRef } from "react";
+import React, { Suspense, useCallback, useRef } from "react";
 import styles from "./page.module.css";
 import { useWorkerContext, WorkerProvider } from "@/contexts/worker-context";
 import { useVideoUpload } from "@/hooks/use-video-upload";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
-
-const PointCloud = ({
-  positions,
-  colors,
-}: {
-  positions: Float32Array;
-  colors: Uint8Array;
-}) => {
-  return (
-    <points key={`${positions.length}-${colors.length}`}>
-      <bufferGeometry>
-        <bufferAttribute
-          attach="attributes-position"
-          count={positions.length / 3}
-          array={positions}
-          itemSize={3}
-        />
-        <bufferAttribute
-          attach="attributes-color"
-          count={colors.length / 3}
-          array={colors}
-          normalized={true}
-          itemSize={3}
-        />
-      </bufferGeometry>
-      <pointsMaterial size={0.3} vertexColors={true} />
-    </points>
-  );
-};
+import { PointCloud } from "@/components/point-cloud";
 
 const Foo = () => {
   const { positions, colors, send } = useWorkerContext();

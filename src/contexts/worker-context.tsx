@@ -4,20 +4,7 @@ import { createContext, use, ReactNode } from "react";
 import { useActorRef, useSelector } from "@xstate/react";
 import { workerMachine, type WorkerEvent } from "@/machines/worker-machine";
 import type { StateFrom } from "xstate";
-
-const workerPromise: Promise<Worker> = new Promise((resolve) => {
-  const worker = new Worker(new URL("../workers/worker.js", import.meta.url), {
-    type: "module",
-  });
-
-  worker.addEventListener("message", (event: MessageEvent) => {
-    if (event.data.type === "pong") {
-      resolve(worker);
-    }
-  });
-
-  worker.postMessage({ type: "ping" });
-});
+import { workerPromise } from "@/helpers/worker-promise";
 
 const selectPositions = (state: StateFrom<typeof workerMachine>) =>
   state.context.positions;
@@ -53,7 +40,7 @@ export const useWorkerContext = () => {
 
   if (!value) {
     throw new Error(
-      "Worker context is not available. Make sure to wrap your component tree with WorkerProvider.",
+      "Worker context is not available. Ensure your component tree is wrapped with WorkerProvider.",
     );
   }
 
