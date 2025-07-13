@@ -11,9 +11,17 @@ const selectPositions = (state: StateFrom<typeof workerMachine>) =>
 const selectColors = (state: StateFrom<typeof workerMachine>) =>
   state.context.colors;
 
+const selectIsPlaying = (state: StateFrom<typeof workerMachine>) =>
+  state.context.isPlaying;
+
+const selectVideoSrc = (state: StateFrom<typeof workerMachine>) =>
+  state.context.videoSrc;
+
 const WorkerContext = createContext<{
   positions: Float32Array | null;
   colors: Uint8Array | null;
+  isPlaying: boolean;
+  videoSrc: string | null;
   send: (event: WorkerEvent) => void;
 } | null>(null);
 
@@ -32,9 +40,13 @@ export const WorkerProvider = ({
 
   const positions = useSelector(actor, selectPositions);
   const colors = useSelector(actor, selectColors);
+  const isPlaying = useSelector(actor, selectIsPlaying);
+  const videoSrc = useSelector(actor, selectVideoSrc);
 
   return (
-    <WorkerContext.Provider value={{ positions, colors, send: actor.send }}>
+    <WorkerContext.Provider
+      value={{ positions, colors, isPlaying, videoSrc, send: actor.send }}
+    >
       {children}
     </WorkerContext.Provider>
   );

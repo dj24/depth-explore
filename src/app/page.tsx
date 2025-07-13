@@ -5,7 +5,6 @@ import React, {
   useCallback,
   useEffect,
   useLayoutEffect,
-  useRef,
   useState,
 } from "react";
 import styles from "./page.module.css";
@@ -17,49 +16,22 @@ import { PointCloud } from "@/components/point-cloud";
 import { getWorkerPromise } from "@/helpers/worker-promise";
 
 const Foo = () => {
-  const { positions, colors, send } = useWorkerContext();
-  const { videoSrc, handleVideoUpload } = useVideoUpload();
-  const [video, setVideo] = useState<HTMLVideoElement | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const { positions, colors, isPlaying, videoSrc, send } = useWorkerContext();
+  const { videoSrc: uploadedVideoSrc, handleVideoUpload } = useVideoUpload();
 
   const handlePlayVideo = useCallback(() => {
-    if (video) {
-      video.play();
-    }
-  }, [video]);
+    send({ type: "playVideo" });
+  }, [send]);
 
   const handlePauseVideo = useCallback(() => {
-    if (video) {
-      video.pause();
-    }
-  }, [video]);
+    send({ type: "pauseVideo" });
+  }, [send]);
 
   useEffect(() => {
-    if (!videoSrc) {
-      return;
+    if (uploadedVideoSrc) {
+      send({ type: "setupVideo", videoSrc: uploadedVideoSrc });
     }
-    const node = document.createElement("video");
-    node.currentTime = 0;
-    node.src = videoSrc;
-    node.addEventListener("play", () => {
-      setIsPlaying(true);
-      intervalRef.current = setInterval(() => {
-        send({
-          type: "start",
-          video: node,
-        });
-      }, 1000 / 24); // 24 FPS
-    });
-    node.addEventListener("pause", () => {
-      setIsPlaying(false);
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
-    });
-    node.load();
-    setVideo(node);
-  }, [videoSrc]);
+  }, [uploadedVideoSrc, send]);
 
   return (
     <>

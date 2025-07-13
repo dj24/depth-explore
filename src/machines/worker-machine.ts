@@ -6,14 +6,24 @@ import { renderVideoFrame } from "@/helpers/render-video-frame";
 import { createPointCloudColorsFromImageData } from "@/helpers/create-point-cloud-colors-from-image-data";
 
 export type WorkerStartEvent = { type: "start"; video: HTMLVideoElement };
+export type WorkerSetupVideoEvent = { type: "setupVideo"; videoSrc: string };
+export type WorkerPlayVideoEvent = { type: "playVideo" };
+export type WorkerPauseVideoEvent = { type: "pauseVideo" };
 
-export type WorkerEvent = WorkerStartEvent;
+export type WorkerEvent =
+  | WorkerStartEvent
+  | WorkerSetupVideoEvent
+  | WorkerPlayVideoEvent
+  | WorkerPauseVideoEvent;
 
 export type WorkerContext = {
   positions: Float32Array | null;
   colors: Uint8Array | null;
   video: HTMLVideoElement | null;
   worker: Worker | null;
+  videoSrc: string | null;
+  isPlaying: boolean;
+  intervalRef: ReturnType<typeof setInterval> | null;
 };
 
 export const workerMachine = setup({
@@ -69,6 +79,53 @@ export const workerMachine = setup({
     ),
   },
   actions: {
+    setupVideo: assign({
+      videoSrc: ({ event, context }) => {
+        return match(event)
+          .with(
+            { type: "setupVideo", videoSrc: P.string },
+            ({ videoSrc }) => videoSrc,
+          )
+          .otherwise(() => context.videoSrc);
+      },
+      video: ({ event, context }) => {
+        return match(event)
+          .with({ type: "setupVideo", videoSrc: P.string }, ({ videoSrc }) => {
+            const node = document.createElement("video");
+            node.currentTime = 0;
+            node.src = videoSrc;
+            return node;
+          })
+          .otherwise(() => context.video);
+      },
+    }),
+    startVideoPlayback: assign({
+      isPlaying: () => true,
+      intervalRef: ({ context, self }) => {
+        if (!context.video) {
+          return null;
+        }
+        context.video.play();
+        return setInterval(() => {
+          self.send({
+            type: "start",
+            video: context.video!,
+          });
+        }, 1000 / 24); // 24 FPS
+      },
+    }),
+    stopVideoPlayback: assign({
+      isPlaying: () => false,
+      intervalRef: ({ context }) => {
+        if (context.video) {
+          context.video.pause();
+        }
+        if (context.intervalRef) {
+          clearInterval(context.intervalRef);
+        }
+        return null;
+      },
+    }),
     assignVideo: assign({
       video: ({ event }) => {
         return match(event)
@@ -80,6 +137,9 @@ export const workerMachine = setup({
       positions: () => null,
       colors: () => null,
       video: () => null,
+      videoSrc: () => null,
+      isPlaying: () => false,
+      intervalRef: () => null,
     }),
   },
 }).createMachine({
@@ -90,13 +150,75 @@ export const workerMachine = setup({
     colors: null,
     video: null,
     worker: input.worker,
+    videoSrc: null,
+    isPlaying: false,
+    intervalRef: null,
   }),
   states: {
     idle: {
       on: {
+        setupVideo: {
+          target: "videoReady",
+          actions: ["setupVideo"],
+        },
         start: {
           target: "processingVideo",
           actions: ["assignVideo"],
+        },
+      },
+    },
+    videoReady: {
+      on: {
+        playVideo: {
+          target: "playing",
+          actions: ["startVideoPlayback"],
+        },
+        start: {
+          target: "processingVideo",
+          actions: ["assignVideo"],
+        },
+      },
+    },
+    playing: {
+      on: {
+        pauseVideo: {
+          target: "videoReady",
+          actions: ["stopVideoPlayback"],
+        },
+        start: {
+          target: "processingFrame",
+          actions: ["assignVideo"],
+        },
+      },
+    },
+    processingFrame: {
+      invoke: {
+        id: "processVideoFrame",
+        src: "processVideoFrame",
+        input: ({ context }) => {
+          if (context.video && context.worker) {
+            return { video: context.video, worker: context.worker };
+          }
+          throw new Error("Missing video or worker");
+        },
+        onDone: {
+          target: "playing",
+          actions: assign({
+            colors: ({ event }) => event.output.colors,
+            positions: ({ event }) => event.output.positions,
+          }),
+        },
+        onError: {
+          target: "playing",
+          actions: ({ event }) => {
+            console.error("Failed to process video frame", event.error);
+          },
+        },
+      },
+      on: {
+        pauseVideo: {
+          target: "videoReady",
+          actions: ["stopVideoPlayback"],
         },
       },
     },
