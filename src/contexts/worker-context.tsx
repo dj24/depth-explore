@@ -1,13 +1,6 @@
 "use client";
 
-import {
-  createContext,
-  use,
-  ReactNode,
-  useState,
-  useMemo,
-  useRef,
-} from "react";
+import { createContext, use, ReactNode } from "react";
 import { useActorRef, useSelector } from "@xstate/react";
 import { workerMachine, type WorkerEvent } from "@/machines/worker-machine";
 import type { StateFrom } from "xstate";
