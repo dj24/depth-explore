@@ -21,7 +21,6 @@ export type WorkerContext = {
   colors: Uint8Array | null;
   video: HTMLVideoElement | null;
   worker: Worker | null;
-  videoSrc: string | null;
   isPlaying: boolean;
   intervalRef: ReturnType<typeof setInterval> | null;
 };
@@ -80,20 +79,21 @@ export const workerMachine = setup({
   },
   actions: {
     setupVideo: assign({
-      videoSrc: ({ event, context }) => {
-        return match(event)
-          .with(
-            { type: "setupVideo", videoSrc: P.string },
-            ({ videoSrc }) => videoSrc,
-          )
-          .otherwise(() => context.videoSrc);
-      },
-      video: ({ event, context }) => {
+      video: ({ event, context, self }) => {
         return match(event)
           .with({ type: "setupVideo", videoSrc: P.string }, ({ videoSrc }) => {
             const node = document.createElement("video");
             node.currentTime = 0;
             node.src = videoSrc;
+
+            node.addEventListener("play", () => {
+              self.send({ type: "playVideo" });
+            });
+
+            node.addEventListener("pause", () => {
+              self.send({ type: "pauseVideo" });
+            });
+
             return node;
           })
           .otherwise(() => context.video);
@@ -137,7 +137,6 @@ export const workerMachine = setup({
       positions: () => null,
       colors: () => null,
       video: () => null,
-      videoSrc: () => null,
       isPlaying: () => false,
       intervalRef: () => null,
     }),
@@ -150,7 +149,6 @@ export const workerMachine = setup({
     colors: null,
     video: null,
     worker: input.worker,
-    videoSrc: null,
     isPlaying: false,
     intervalRef: null,
   }),
@@ -169,6 +167,10 @@ export const workerMachine = setup({
     },
     videoReady: {
       on: {
+        setupVideo: {
+          target: "videoReady",
+          actions: ["setupVideo"],
+        },
         playVideo: {
           target: "playing",
           actions: ["startVideoPlayback"],
@@ -181,6 +183,10 @@ export const workerMachine = setup({
     },
     playing: {
       on: {
+        setupVideo: {
+          target: "videoReady",
+          actions: ["stopVideoPlayback", "setupVideo"],
+        },
         pauseVideo: {
           target: "videoReady",
           actions: ["stopVideoPlayback"],
@@ -216,6 +222,10 @@ export const workerMachine = setup({
         },
       },
       on: {
+        setupVideo: {
+          target: "videoReady",
+          actions: ["stopVideoPlayback", "setupVideo"],
+        },
         pauseVideo: {
           target: "videoReady",
           actions: ["stopVideoPlayback"],
@@ -244,6 +254,12 @@ export const workerMachine = setup({
           actions: ({ event }) => {
             console.error("Failed to process video frame", event.error);
           },
+        },
+      },
+      on: {
+        setupVideo: {
+          target: "videoReady",
+          actions: ["setupVideo"],
         },
       },
     },
