@@ -19,7 +19,8 @@ const getDepthAnythingModel = async () => {
         },
       );
       console.log("pipeline is ready, device", device);
-      return { pipeline: depthEstimationPipeline, device };
+      depthAnythingModel = { pipeline: depthEstimationPipeline, device };
+      return depthAnythingModel;
     } catch (error) {
       console.warn(`Failed to load pipeline with device ${device}:`, error);
     }
@@ -35,7 +36,6 @@ self.onmessage = async (e) => {
         self.postMessage({ type: "pong", data: depthInstance.device });
       })
       .with("depth", async () => {
-        console.log({ data });
         const image = await RawImage.read(data);
         const { depth } = await depthInstance.pipeline(image);
         self.postMessage({ type: "depth_result", data: depth });

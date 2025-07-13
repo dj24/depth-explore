@@ -38,7 +38,6 @@ export const workerMachine = setup({
 
         const positions = await new Promise<Float32Array>((resolve, reject) => {
           const handleDepthMessage = (event: MessageEvent<unknown>) => {
-            console.log("received depth data from worker", event.data);
             match(event.data)
               .with(
                 {
