@@ -1,5 +1,5 @@
-export const getWorkerPromise = (): Promise<Worker> =>
-  new Promise((resolve) => {
+export const getWorkerPromise = (): Promise<Worker> => {
+  return new Promise((resolve) => {
     const worker = new Worker(
       new URL("../workers/worker.js", import.meta.url),
       {
@@ -15,3 +15,4 @@ export const getWorkerPromise = (): Promise<Worker> =>
 
     worker.postMessage({ type: "ping" });
   });
+};

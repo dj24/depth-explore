@@ -18,7 +18,7 @@ const WorkerContext = createContext<{
   send: (event: WorkerEvent) => void;
 } | null>(null);
 
-let workerPromise = getWorkerPromise();
+const workerPromise = getWorkerPromise();
 
 export const WorkerProvider = ({ children }: { children: ReactNode }) => {
   const worker = use(workerPromise);

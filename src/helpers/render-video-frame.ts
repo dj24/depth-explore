@@ -15,7 +15,10 @@ export const renderVideoFrame = async (
   }
   context.drawImage(video, 0, 0, downscaledWidth, downscaledHeight);
   return {
-    blob: await canvas.convertToBlob(),
+    blob: await canvas.convertToBlob({
+      type: "image/webp",
+      quality: 0.5, // PNG does not support quality, but this is a placeholder
+    }),
     imageData: context.getImageData(0, 0, downscaledWidth, downscaledHeight),
   };
 };
