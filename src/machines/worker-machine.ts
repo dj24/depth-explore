@@ -6,12 +6,8 @@ import { renderVideoFrame } from "@/helpers/render-video-frame";
 import { createPointCloudColorsFromImageData } from "@/helpers/create-point-cloud-colors-from-image-data";
 
 export type WorkerStartEvent = { type: "start"; video: HTMLVideoElement };
-export type AssignDepthEvent = {
-  type: "assignDepth";
-  rawImage: { data: RawImage };
-};
 
-export type WorkerEvent = WorkerStartEvent | AssignDepthEvent;
+export type WorkerEvent = WorkerStartEvent;
 
 export type WorkerContext = {
   positions: Float32Array | null;
@@ -40,7 +36,7 @@ export const workerMachine = setup({
           data: blob,
         });
 
-        const positions = await new Promise((resolve, reject) => {
+        const positions = await new Promise<Float32Array>((resolve, reject) => {
           const handleDepthMessage = (event: MessageEvent<unknown>) => {
             console.log("received depth data from worker", event.data);
             match(event.data)
