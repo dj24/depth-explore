@@ -10,15 +10,8 @@ export type AssignDepthEvent = {
   type: "assignDepth";
   rawImage: { data: RawImage };
 };
-export type AssignColorsEvent = {
-  type: "assignColors";
-  colors: Uint8Array;
-};
 
-export type WorkerEvent =
-  | WorkerStartEvent
-  | AssignDepthEvent
-  | AssignColorsEvent;
+export type WorkerEvent = WorkerStartEvent | AssignDepthEvent;
 
 export type WorkerContext = {
   positions: Float32Array | null;
@@ -42,16 +35,41 @@ export const workerMachine = setup({
       }) => {
         const { blob, imageData } = await renderVideoFrame(input.video);
 
-        // Send data to worker
         input.worker.postMessage({
           type: "depth",
           data: blob,
         });
 
-        // Generate colors from image data
-        const colors = createPointCloudColorsFromImageData(imageData);
+        const positions = await new Promise((resolve, reject) => {
+          const handleDepthMessage = (event: MessageEvent<unknown>) => {
+            console.log("received depth data from worker", event.data);
+            match(event.data)
+              .with(
+                {
+                  type: "depth_result",
+                  data: P.nonNullable,
+                },
+                ({ data }) => {
+                  resolve(
+                    createPointCloudPositionsFromRawImage(data as RawImage),
+                  );
+                  input.worker.removeEventListener(
+                    "message",
+                    handleDepthMessage,
+                  );
+                },
+              )
+              .with({ type: "depth_result", data: P.nullish }, () => {
+                reject(new Error("Received null or undefined depth data"));
+                input.worker.removeEventListener("message", handleDepthMessage);
+              });
+          };
 
-        return { colors };
+          input.worker.addEventListener("message", handleDepthMessage);
+        });
+
+        const colors = createPointCloudColorsFromImageData(imageData);
+        return { colors, positions };
       },
     ),
   },
@@ -61,36 +79,6 @@ export const workerMachine = setup({
         return match(event)
           .with({ type: "start", video: P.nonNullable }, ({ video }) => video)
           .otherwise(() => null);
-      },
-    }),
-    assignColors: assign({
-      colors: ({ event }) => {
-        return match(event)
-          .with(
-            { type: "assignColors", colors: P.nonNullable },
-            ({ colors }) => colors,
-          )
-          .otherwise(() => {
-            throw new Error(
-              `Invalid event type: ${event.type} or missing colors`,
-            );
-          });
-      },
-    }),
-    assignDepth: assign({
-      positions: ({ event }) => {
-        return match(event)
-          .with(
-            { type: "assignDepth", rawImage: P.nonNullable },
-            ({ rawImage }) => {
-              return createPointCloudPositionsFromRawImage(rawImage.data);
-            },
-          )
-          .otherwise(() => {
-            throw new Error(
-              `Invalid event type: ${event.type} or missing rawImage`,
-            );
-          });
       },
     }),
     reset: assign({
@@ -128,22 +116,17 @@ export const workerMachine = setup({
           throw new Error("Missing video or worker");
         },
         onDone: {
-          target: "waitingForDepthData",
+          target: "idle",
           actions: assign({
             colors: ({ event }) => event.output.colors,
+            positions: ({ event }) => event.output.positions,
           }),
         },
         onError: {
           target: "idle",
-          actions: () => console.error("Failed to process video frame"),
-        },
-      },
-    },
-    waitingForDepthData: {
-      on: {
-        assignDepth: {
-          target: "idle",
-          actions: "assignDepth",
+          actions: ({ event }) => {
+            console.error("Failed to process video frame", event.error);
+          },
         },
       },
     },
