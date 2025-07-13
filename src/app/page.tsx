@@ -31,7 +31,7 @@ const PointCloud = ({
           itemSize={3}
         />
       </bufferGeometry>
-      <pointsMaterial size={0.2} vertexColors={true} />
+      <pointsMaterial size={0.3} vertexColors={true} />
     </points>
   );
 };

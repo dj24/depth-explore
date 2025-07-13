@@ -1,32 +1,38 @@
 "use client";
 
-import { createContext, ReactNode, use } from "react";
+import { createContext, use, ReactNode } from "react";
 import { useActorRef, useSelector } from "@xstate/react";
+import { workerMachine, type WorkerEvent } from "@/machines/worker-machine";
 import { match, P } from "ts-pattern";
-import { assign } from "xstate";
-import { WorkerEvent, workerMachine } from "@/machines/worker-machine";
-import { renderVideoFrame } from "@/helpers/render-video-frame";
-import { createPointCloudColorsFromImageData } from "@/helpers/create-point-cloud-colors-from-image-data";
+import { RawImage } from "@huggingface/transformers";
+import type { StateFrom } from "xstate";
 
+// Create worker instance - this is fine to be global as it's a singleton resource
 const workerPromise: Promise<Worker> = new Promise((resolve) => {
   const worker = new Worker(new URL("../workers/worker.js", import.meta.url), {
     type: "module",
   });
-  worker.postMessage({ type: "ping" });
-  worker.addEventListener("message", (event) => {
+
+  worker.addEventListener("message", (event: MessageEvent) => {
     if (event.data.type === "pong") {
       resolve(worker);
     }
   });
+
+  worker.postMessage({ type: "ping" });
 });
 
-const selectPositions = (state: any) => {
-  return state.context.positions;
-};
+// Selectors for machine state with proper typing
+const selectPositions = (state: StateFrom<typeof workerMachine>) =>
+  state.context.positions;
+const selectColors = (state: StateFrom<typeof workerMachine>) =>
+  state.context.colors;
 
-const selectColors = (state: any) => {
-  return state.context.colors;
-};
+// Message types from worker
+type WorkerMessage =
+  | { type: "depth_result"; data: RawImage }
+  | { type: "error"; data: Error }
+  | { type: "pong"; data: string };
 
 const WorkerContext = createContext<{
   positions: Float32Array | null;
@@ -37,39 +43,22 @@ const WorkerContext = createContext<{
 export const WorkerProvider = ({ children }: { children: ReactNode }) => {
   const worker = use(workerPromise);
 
-  const actor = useActorRef(
-    workerMachine.provide({
-      actions: {
-        start: ({ event }) => {
-          return match(event).with(
-            { type: "start", video: P.nonNullable },
-            ({ video }) => {
-              renderVideoFrame(video).then(({ blob, imageData }) => {
-                worker.postMessage({
-                  type: "depth",
-                  data: blob,
-                });
-                actor.send({
-                  type: "assignColors",
-                  colors: createPointCloudColorsFromImageData(imageData),
-                });
-              });
-            },
-          );
-        },
-      },
-    }),
-  );
+  // Initialize the machine with the worker
+  const actor = useActorRef(workerMachine, {
+    input: { worker },
+  });
 
   const positions = useSelector(actor, selectPositions);
   const colors = useSelector(actor, selectColors);
 
-  console.log({ positions, colors });
-
-  worker.addEventListener("message", (event: MessageEvent<any>) => {
+  // Set up worker message handling
+  worker.addEventListener("message", (event: MessageEvent<WorkerMessage>) => {
     match(event.data)
-      .with({ type: "depth_result" }, () => {
-        actor.send({ type: "assignDepth", rawImage: event.data });
+      .with({ type: "depth_result" }, (data) => {
+        actor.send({ type: "assignDepth", rawImage: { data: data.data } });
+      })
+      .with({ type: "error" }, (data) => {
+        console.error("Worker error:", data.data);
       })
       .with({ type: P.string }, (data) => {
         console.warn(`Unknown message type: ${data.type}`);
@@ -88,7 +77,7 @@ export const useWorkerContext = () => {
 
   if (!value) {
     throw new Error(
-      "Worker context is not available. Make sure to wrap your component tree with WorkerContextProvider.",
+      "Worker context is not available. Make sure to wrap your component tree with WorkerProvider.",
     );
   }
 
