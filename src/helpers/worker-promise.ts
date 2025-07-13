@@ -1,13 +1,17 @@
-export const workerPromise: Promise<Worker> = new Promise((resolve) => {
-  const worker = new Worker(new URL("../workers/worker.js", import.meta.url), {
-    type: "module",
-  });
+export const getWorkerPromise = (): Promise<Worker> =>
+  new Promise((resolve) => {
+    const worker = new Worker(
+      new URL("../workers/worker.js", import.meta.url),
+      {
+        type: "module",
+      },
+    );
 
-  worker.addEventListener("message", (event: MessageEvent) => {
-    if (event.data.type === "pong") {
-      resolve(worker);
-    }
-  });
+    worker.addEventListener("message", (event: MessageEvent) => {
+      if (event.data.type === "pong") {
+        resolve(worker);
+      }
+    });
 
-  worker.postMessage({ type: "ping" });
-});
+    worker.postMessage({ type: "ping" });
+  });

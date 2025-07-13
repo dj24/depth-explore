@@ -4,7 +4,7 @@ import { createContext, use, ReactNode } from "react";
 import { useActorRef, useSelector } from "@xstate/react";
 import { workerMachine, type WorkerEvent } from "@/machines/worker-machine";
 import type { StateFrom } from "xstate";
-import { workerPromise } from "@/helpers/worker-promise";
+import { getWorkerPromise } from "@/helpers/worker-promise";
 
 const selectPositions = (state: StateFrom<typeof workerMachine>) =>
   state.context.positions;
@@ -17,6 +17,8 @@ const WorkerContext = createContext<{
   colors: Uint8Array | null;
   send: (event: WorkerEvent) => void;
 } | null>(null);
+
+let workerPromise = getWorkerPromise();
 
 export const WorkerProvider = ({ children }: { children: ReactNode }) => {
   const worker = use(workerPromise);

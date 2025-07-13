@@ -1,41 +1,43 @@
 import { pipeline, RawImage } from "@huggingface/transformers";
 import { match } from "ts-pattern";
 
-class DepthAnythingSingleton {
-  static pipeline;
-  static model = "onnx-community/depth-anything-v2-small";
-  static device = null;
+const MODEL = "onnx-community/depth-anything-v2-small";
 
-  static async getInstance() {
-    if (!this.depth_estimator) {
-      for (let device of ["webgpu", "wasm"]) {
-        try {
-          this.pipeline = await pipeline("depth-estimation", this.model, {
-            device: device,
-          });
-          this.device = device;
-          console.log("pipeline is ready, device", device);
-          break;
-        } catch (e) {
-          /* ignore and try next device */
-        }
-      }
-    }
-    return this.pipeline;
+let depthAnythingModel = null;
+
+const getDepthAnythingModel = async () => {
+  if (depthAnythingModel) {
+    return depthAnythingModel;
   }
-}
+  for (let device of ["webgpu", "wasm"]) {
+    try {
+      const depthEstimationPipeline = await pipeline(
+        "depth-estimation",
+        MODEL,
+        {
+          device: device,
+        },
+      );
+      console.log("pipeline is ready, device", device);
+      return { pipeline: depthEstimationPipeline, device };
+    } catch (error) {
+      console.warn(`Failed to load pipeline with device ${device}:`, error);
+    }
+  }
+};
 
 self.onmessage = async (e) => {
+  const depthInstance = await getDepthAnythingModel();
   try {
-    const depth_estimator = await DepthAnythingSingleton.getInstance();
     const { type, data } = e.data;
     match(type)
       .with("ping", () => {
-        self.postMessage({ type: "pong", data: DepthAnythingSingleton.device });
+        self.postMessage({ type: "pong", data: depthInstance.device });
       })
       .with("depth", async () => {
+        console.log({ data });
         const image = await RawImage.read(data);
-        const { depth } = await depth_estimator(image);
+        const { depth } = await depthInstance.pipeline(image);
         self.postMessage({ type: "depth_result", data: depth });
       })
       .otherwise(() => {
