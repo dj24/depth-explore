@@ -1,4 +1,4 @@
-const TARGET_WIDTH = 320;
+const TARGET_WIDTH = 640;
 
 export const renderVideoFrame = async (
   video: HTMLVideoElement,

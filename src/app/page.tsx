@@ -1,12 +1,19 @@
 "use client";
 
-import React, { Suspense, useCallback, useRef } from "react";
+import React, {
+  Suspense,
+  useCallback,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import styles from "./page.module.css";
 import { useWorkerContext, WorkerProvider } from "@/contexts/worker-context";
 import { useVideoUpload } from "@/hooks/use-video-upload";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import { PointCloud } from "@/components/point-cloud";
+import { getWorkerPromise } from "@/helpers/worker-promise";
 
 const Foo = () => {
   const { positions, colors, send } = useWorkerContext();
@@ -66,13 +73,23 @@ const Foo = () => {
 };
 
 export default function Home() {
+  const [workerPromise, setWorkerPromise] = useState<Promise<Worker> | null>(
+    null,
+  );
+
+  useLayoutEffect(() => {
+    setWorkerPromise(getWorkerPromise());
+  }, []);
+
   return (
     <Suspense fallback={<div>Loading...</div>}>
-      <WorkerProvider>
-        <div className={styles.page}>
-          <Foo />
-        </div>
-      </WorkerProvider>
+      {workerPromise && (
+        <WorkerProvider workerPromise={workerPromise}>
+          <div className={styles.page}>
+            <Foo />
+          </div>
+        </WorkerProvider>
+      )}
     </Suspense>
   );
 }
