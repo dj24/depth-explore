@@ -96,7 +96,7 @@ export const workerMachine = setup({
       on: {
         start: {
           target: "processingVideo",
-          actions: ["reset", "assignVideo"],
+          actions: ["assignVideo"],
         },
       },
     },

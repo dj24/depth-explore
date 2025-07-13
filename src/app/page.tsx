@@ -3,6 +3,7 @@
 import React, {
   Suspense,
   useCallback,
+  useEffect,
   useLayoutEffect,
   useRef,
   useState,
@@ -18,20 +19,53 @@ import { getWorkerPromise } from "@/helpers/worker-promise";
 const Foo = () => {
   const { positions, colors, send } = useWorkerContext();
   const { videoSrc, handleVideoUpload } = useVideoUpload();
-  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [video, setVideo] = useState<HTMLVideoElement | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const handleSendFrame = useCallback(() => {
-    if (videoRef.current) {
-      send({
-        type: "start",
-        video: videoRef.current,
-      });
+  const handlePlayVideo = useCallback(() => {
+    if (video) {
+      video.play();
     }
-  }, [send]);
+  }, [video]);
+
+  const handlePauseVideo = useCallback(() => {
+    if (video) {
+      video.pause();
+    }
+  }, [video]);
+
+  useEffect(() => {
+    if (!videoSrc) {
+      return;
+    }
+    const node = document.createElement("video");
+    node.currentTime = 0;
+    node.src = videoSrc;
+    node.addEventListener("play", () => {
+      setIsPlaying(true);
+      intervalRef.current = setInterval(() => {
+        send({
+          type: "start",
+          video: node,
+        });
+      }, 1000 / 24); // 24 FPS
+    });
+    node.addEventListener("pause", () => {
+      setIsPlaying(false);
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    });
+    node.load();
+    setVideo(node);
+  }, [videoSrc]);
 
   return (
     <>
-      <button onClick={handleSendFrame}>Upload Frame</button>
+      <button onClick={isPlaying ? handlePauseVideo : handlePlayVideo}>
+        {isPlaying ? "Pause" : "Play"}
+      </button>
       <label htmlFor="video-upload">Upload Video</label>
       <input
         id="video-upload"
@@ -41,19 +75,6 @@ const Foo = () => {
         className={styles.hiddenInput}
       />
       <div>
-        {videoSrc && (
-          <video
-            onLoadedMetadata={(event) => {
-              const video = event.currentTarget;
-              const aspectRatio = video.videoWidth / video.videoHeight;
-              video.style.aspectRatio = `${aspectRatio} / 1`;
-            }}
-            style={{ width: 640 }}
-            ref={videoRef}
-            src={videoSrc}
-            controls
-          />
-        )}
         <Canvas
           camera={{ fov: 15 }}
           style={{
