@@ -5,16 +5,16 @@ import { createPointCloudPositionsFromRawImage } from "@/helpers/create-point-cl
 import { renderVideoFrame } from "@/helpers/render-video-frame";
 import { createPointCloudColorsFromImageData } from "@/helpers/create-point-cloud-colors-from-image-data";
 
-export type WorkerStartEvent = { type: "start"; video: HTMLVideoElement };
 export type WorkerSetupVideoEvent = { type: "setupVideo"; videoSrc: string };
 export type WorkerPlayVideoEvent = { type: "playVideo" };
 export type WorkerPauseVideoEvent = { type: "pauseVideo" };
+export type WorkerProcessFrameEvent = { type: "processFrame" };
 
 export type WorkerEvent =
-  | WorkerStartEvent
   | WorkerSetupVideoEvent
   | WorkerPlayVideoEvent
-  | WorkerPauseVideoEvent;
+  | WorkerPauseVideoEvent
+  | WorkerProcessFrameEvent;
 
 export type WorkerContext = {
   positions: Float32Array | null;
@@ -25,13 +25,33 @@ export type WorkerContext = {
   intervalRef: ReturnType<typeof setInterval> | null;
 };
 
+const FRAMES_PER_SECOND = 24;
+
 export const workerMachine = setup({
   types: {
     events: {} as WorkerEvent,
     context: {} as WorkerContext,
-    input: {} as { worker: Worker },
   },
   actors: {
+    loadWorker: fromPromise(async () => {
+      return new Promise<Worker>((resolve) => {
+        console.log("Creating worker...");
+        const worker = new Worker(
+          new URL("../workers/worker.js", import.meta.url),
+          {
+            type: "module",
+          },
+        );
+
+        worker.addEventListener("message", (event: MessageEvent) => {
+          if (event.data.type === "pong") {
+            resolve(worker);
+          }
+        });
+
+        worker.postMessage({ type: "ping" });
+      });
+    }),
     processVideoFrame: fromPromise(
       async ({
         input,
@@ -78,6 +98,9 @@ export const workerMachine = setup({
     ),
   },
   actions: {
+    assignWorker: assign({
+      worker: ({ event }) => (event as any).output,
+    }),
     setupVideo: assign({
       video: ({ event, context, self }) => {
         return match(event)
@@ -107,11 +130,11 @@ export const workerMachine = setup({
         }
         context.video.play();
         return setInterval(() => {
-          self.send({
-            type: "start",
-            video: context.video!,
-          });
-        }, 1000 / 24); // 24 FPS
+          // Process video frame directly instead of sending start event
+          if (context.worker && context.video) {
+            self.send({ type: "processFrame" });
+          }
+        }, 1000 / FRAMES_PER_SECOND); // 24 FPS
       },
     }),
     stopVideoPlayback: assign({
@@ -126,13 +149,6 @@ export const workerMachine = setup({
         return null;
       },
     }),
-    assignVideo: assign({
-      video: ({ event }) => {
-        return match(event)
-          .with({ type: "start", video: P.nonNullable }, ({ video }) => video)
-          .otherwise(() => null);
-      },
-    }),
     reset: assign({
       positions: () => null,
       colors: () => null,
@@ -143,57 +159,58 @@ export const workerMachine = setup({
   },
 }).createMachine({
   id: "worker",
-  initial: "idle",
-  context: ({ input }) => ({
+  initial: "loadingWorker",
+  context: {
     positions: null,
     colors: null,
     video: null,
-    worker: input.worker,
+    worker: null,
     isPlaying: false,
     intervalRef: null,
-  }),
+  },
+  // Global transitions - these can be triggered from any state
+  on: {
+    setupVideo: {
+      target: ".paused",
+      actions: ["stopVideoPlayback", "setupVideo"],
+    },
+  },
   states: {
-    idle: {
-      on: {
-        setupVideo: {
-          target: "videoReady",
-          actions: ["setupVideo"],
+    loadingWorker: {
+      invoke: {
+        id: "loadWorker",
+        src: "loadWorker",
+        onDone: {
+          target: "noVideo",
+          actions: "assignWorker",
         },
-        start: {
-          target: "processingVideo",
-          actions: ["assignVideo"],
+        onError: {
+          target: "loadingWorker",
+          actions: ({ event }) => {
+            console.error("Failed to load worker, retrying...", event.error);
+          },
         },
       },
     },
-    videoReady: {
+    noVideo: {
+      // No events needed here - setupVideo is handled globally
+    },
+    paused: {
       on: {
-        setupVideo: {
-          target: "videoReady",
-          actions: ["setupVideo"],
-        },
         playVideo: {
           target: "playing",
           actions: ["startVideoPlayback"],
-        },
-        start: {
-          target: "processingVideo",
-          actions: ["assignVideo"],
         },
       },
     },
     playing: {
       on: {
-        setupVideo: {
-          target: "videoReady",
-          actions: ["stopVideoPlayback", "setupVideo"],
-        },
         pauseVideo: {
-          target: "videoReady",
+          target: "paused",
           actions: ["stopVideoPlayback"],
         },
-        start: {
+        processFrame: {
           target: "processingFrame",
-          actions: ["assignVideo"],
         },
       },
     },
@@ -219,47 +236,6 @@ export const workerMachine = setup({
           actions: ({ event }) => {
             console.error("Failed to process video frame", event.error);
           },
-        },
-      },
-      on: {
-        setupVideo: {
-          target: "videoReady",
-          actions: ["stopVideoPlayback", "setupVideo"],
-        },
-        pauseVideo: {
-          target: "videoReady",
-          actions: ["stopVideoPlayback"],
-        },
-      },
-    },
-    processingVideo: {
-      invoke: {
-        id: "processVideoFrame",
-        src: "processVideoFrame",
-        input: ({ context }) => {
-          if (context.video && context.worker) {
-            return { video: context.video, worker: context.worker };
-          }
-          throw new Error("Missing video or worker");
-        },
-        onDone: {
-          target: "idle",
-          actions: assign({
-            colors: ({ event }) => event.output.colors,
-            positions: ({ event }) => event.output.positions,
-          }),
-        },
-        onError: {
-          target: "idle",
-          actions: ({ event }) => {
-            console.error("Failed to process video frame", event.error);
-          },
-        },
-      },
-      on: {
-        setupVideo: {
-          target: "videoReady",
-          actions: ["setupVideo"],
         },
       },
     },

@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, use, ReactNode } from "react";
+import { createContext, useContext, ReactNode } from "react";
 import { useActorRef, useSelector } from "@xstate/react";
 import { workerMachine, type WorkerEvent } from "@/machines/worker-machine";
 import type { StateFrom } from "xstate";
@@ -14,38 +14,34 @@ const selectColors = (state: StateFrom<typeof workerMachine>) =>
 const selectIsPlaying = (state: StateFrom<typeof workerMachine>) =>
   state.context.isPlaying;
 
-const selectVideoSrc = (state: StateFrom<typeof workerMachine>) =>
-  state.context.videoSrc;
+const selectIsLoading = (state: StateFrom<typeof workerMachine>) =>
+  state.matches("loadingWorker");
 
 const WorkerContext = createContext<{
   positions: Float32Array | null;
   colors: Uint8Array | null;
   isPlaying: boolean;
-  videoSrc: string | null;
+  isLoading: boolean;
   send: (event: WorkerEvent) => void;
 } | null>(null);
 
-export const WorkerProvider = ({
-  children,
-  workerPromise,
-}: {
-  children: ReactNode;
-  workerPromise: Promise<Worker>;
-}) => {
-  const worker = use(workerPromise);
-
-  const actor = useActorRef(workerMachine, {
-    input: { worker },
-  });
+export const WorkerProvider = ({ children }: { children: ReactNode }) => {
+  const actor = useActorRef(workerMachine);
 
   const positions = useSelector(actor, selectPositions);
   const colors = useSelector(actor, selectColors);
   const isPlaying = useSelector(actor, selectIsPlaying);
-  const videoSrc = useSelector(actor, selectVideoSrc);
+  const isLoading = useSelector(actor, selectIsLoading);
 
   return (
     <WorkerContext.Provider
-      value={{ positions, colors, isPlaying, videoSrc, send: actor.send }}
+      value={{
+        positions,
+        colors,
+        isPlaying,
+        isLoading,
+        send: actor.send,
+      }}
     >
       {children}
     </WorkerContext.Provider>
@@ -53,7 +49,7 @@ export const WorkerProvider = ({
 };
 
 export const useWorkerContext = () => {
-  const value = use(WorkerContext);
+  const value = useContext(WorkerContext);
 
   if (!value) {
     throw new Error(
