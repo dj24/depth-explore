@@ -2,7 +2,7 @@
 
 import { createContext, useContext, ReactNode } from "react";
 import { useActorRef, useSelector } from "@xstate/react";
-import { workerMachine, type WorkerEvent } from "@/machines/worker-machine";
+import { workerMachine } from "@/machines/worker-machine";
 import type { StateFrom } from "xstate";
 
 const WorkerContext = createContext<{

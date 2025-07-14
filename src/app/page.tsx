@@ -17,6 +17,7 @@ import { PointCloud } from "@/components/point-cloud";
 import { PlaybackSlider } from "@/components/playback-slider";
 import { PauseIcon } from "@/components/icons/pause";
 import { PlayIcon } from "@/components/icons/play";
+import { CloseIcon } from "@/components/icons/close";
 
 const VideoUploader = () => {
   const { actor } = useWorkerContext();
@@ -110,6 +111,19 @@ const CanvasWrapper = () => {
   );
 };
 
+const ClearButton = () => {
+  const { actor } = useWorkerContext();
+
+  return (
+    <button
+      className={styles.ClearButton}
+      onClick={() => actor.send({ type: "resetVideo" })}
+    >
+      <CloseIcon />
+    </button>
+  );
+};
+
 export default function Home() {
   const isEmpty = useIsEmpty();
 
@@ -117,6 +131,7 @@ export default function Home() {
     <main className={styles.Page}>
       {isEmpty ? <VideoUploader /> : <CanvasWrapper />}
       <PlaybackControls />
+      <ClearButton />
     </main>
   );
 }

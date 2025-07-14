@@ -5,6 +5,7 @@ import { createPointCloudPositionsFromRawImage } from "@/helpers/create-point-cl
 import { renderVideoFrame } from "@/helpers/render-video-frame";
 import { createPointCloudColorsFromImageData } from "@/helpers/create-point-cloud-colors-from-image-data";
 
+export type WorkerResetVideoEvent = { type: "resetVideo" };
 export type WorkerSetupVideoEvent = { type: "setupVideo"; videoSrc: string };
 export type WorkerPlayVideoEvent = { type: "playVideo" };
 export type WorkerPauseVideoEvent = { type: "pauseVideo" };
@@ -20,6 +21,7 @@ export type WorkerUpdateCurrentTimeEvent = {
 };
 
 export type WorkerEvent =
+  | WorkerResetVideoEvent
   | WorkerSetupVideoEvent
   | WorkerPlayVideoEvent
   | WorkerPauseVideoEvent
@@ -49,7 +51,6 @@ export const workerMachine = setup({
   actors: {
     loadWorker: fromPromise(async () => {
       return new Promise<Worker>((resolve) => {
-        console.log("Creating worker...");
         const worker = new Worker(
           new URL("../workers/worker.js", import.meta.url),
           {
@@ -200,10 +201,7 @@ export const workerMachine = setup({
         if (!context.video) {
           return null;
         }
-        // Use a promise to ensure play() completes
-        context.video.play().catch((error) => {
-          console.error("Failed to play video:", error);
-        });
+        context.video.play();
 
         return setInterval(() => {
           if (context.worker && context.video && !context.video.paused) {
@@ -227,9 +225,23 @@ export const workerMachine = setup({
     reset: assign({
       positions: () => null,
       colors: () => null,
-      video: () => null,
+      video: ({ context }) => {
+        if (context.video) {
+          context.video.pause();
+          context.video.removeAttribute("src");
+          context.video.load(); // This clears the video
+        }
+        return null;
+      },
       isPlaying: () => false,
-      intervalRef: () => null,
+      intervalRef: ({ context }) => {
+        if (context.intervalRef) {
+          clearInterval(context.intervalRef);
+        }
+        return null;
+      },
+      currentTime: () => 0,
+      duration: () => 0,
     }),
   },
 }).createMachine({
@@ -246,6 +258,10 @@ export const workerMachine = setup({
     duration: 0,
   },
   on: {
+    resetVideo: {
+      target: ".noVideo",
+      actions: ["reset"],
+    },
     setupVideo: {
       target: ".paused",
       actions: ["stopVideoPlayback", "setupVideo"],
@@ -298,6 +314,12 @@ export const workerMachine = setup({
       },
     },
     processingFrame: {
+      on: {
+        pauseVideo: {
+          target: "paused",
+          actions: ["stopVideoPlayback"],
+        },
+      },
       invoke: {
         id: "processVideoFrame",
         src: "processVideoFrame",

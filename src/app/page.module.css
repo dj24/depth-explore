@@ -12,11 +12,10 @@
 }
 
 .PlaybackControls {
-    --panel-opacity: 0.4;
     display: flex;
     align-items: center;
     padding: 1rem 2.5rem;
-    gap: 3rem;
+    gap: 1rem;
     position: fixed;
     bottom: 2rem;
     left: 2rem;
@@ -28,7 +27,6 @@
 }
 
 .UploadControl {
-    --panel-opacity: 0.4;
     padding: 1rem;
     width: 8rem;
     margin: auto;
@@ -47,6 +45,7 @@
 .PlayPauseButton {
     width: 3rem;
     height: 3rem;
+    margin-left: -1rem;
     background:transparent;
     display: flex;
     align-items: center;
@@ -54,4 +53,25 @@
     color: var(--color-gray-900);
     border: 0;
     cursor: pointer;
+}
+
+.ClearButton {
+    width: 3rem;
+    height: 3rem;
+    padding: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 100%;
+    color: var(--color-gray-900);
+    background: rgba(50, 50, 50, var(--panel-opacity));
+    backdrop-filter: blur(32px) saturate(180%) brightness(0.5);
+    border: rgba(100,100,100, var(--panel-opacity)) 1px solid;
+    cursor: pointer;
+    &:hover {
+        background: rgba(80, 80, 80, var(--panel-opacity));
+    }
+    position: absolute;
+    top: 2rem;
+    right: 2rem;
 }
