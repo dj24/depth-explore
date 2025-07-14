@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useCallback, useEffect } from "react";
+import React, { useEffect } from "react";
 import styles from "./page.module.css";
-import { useWorkerContext, WorkerProvider } from "@/contexts/worker-context";
+import { useWorkerContext } from "@/contexts/worker-context";
 import { useVideoUpload } from "@/hooks/use-video-upload";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
@@ -53,7 +53,7 @@ const PlaybackControls = () => {
 };
 
 const CanvasWrapper = () => {
-  const { positions, colors, isPlaying, isLoading, send } = useWorkerContext();
+  const { positions, colors } = useWorkerContext();
 
   return (
     <Canvas camera={{ fov: 15 }}>

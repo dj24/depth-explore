@@ -113,7 +113,7 @@ export const workerMachine = setup({
   },
   actions: {
     assignWorker: assign({
-      worker: ({ event }) => (event as any).output,
+      worker: ({ event }) => (event as unknown as { output: Worker }).output,
     }),
     setupVideo: assign({
       video: ({ event, context, self }) => {
@@ -160,10 +160,12 @@ export const workerMachine = setup({
       },
     }),
     updateVideoMetadata: assign({
-      duration: ({ event }) => (event as any).duration,
+      duration: ({ event }) =>
+        (event as unknown as { duration: number }).duration,
     }),
     updateCurrentTime: assign({
-      currentTime: ({ event }) => (event as any).currentTime,
+      currentTime: ({ event }) =>
+        (event as unknown as { currentTime: number }).currentTime,
     }),
     seekVideo: assign({
       currentTime: ({ event, context }) => {

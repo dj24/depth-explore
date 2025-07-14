@@ -1,4 +1,5 @@
 import { WorkerProvider } from "@/contexts/worker-context";
+import "./global.css";
 
 export const metadata = {
   title: "Next.js",
