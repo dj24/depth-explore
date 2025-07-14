@@ -1,6 +1,6 @@
 import { RawImage } from "@huggingface/transformers";
 
-const Z_SCALE = 1.0;
+const Z_SCALE = 1.5;
 
 export const createPointCloudPositionsFromRawImage = (
   rawImage: RawImage,

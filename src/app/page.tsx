@@ -6,7 +6,6 @@ import {
   useColors,
   useCurrentTime,
   useIsEmpty,
-  useIsLoading,
   useIsPlaying,
   usePositions,
   useVideoDuration,
@@ -51,6 +50,7 @@ const PlayPauseButton = () => {
 
   return (
     <button
+      className={styles.PlayPauseButton}
       onClick={() =>
         actor.send({ type: isPlaying ? "pauseVideo" : "playVideo" })
       }
@@ -95,8 +95,14 @@ const CanvasWrapper = () => {
   const colors = useColors();
 
   return (
-    <Canvas camera={{ fov: 15 }}>
-      <OrbitControls makeDefault />
+    <Canvas camera={{ fov: 15, position: [0, 0, 10] }}>
+      <OrbitControls
+        makeDefault
+        enableZoom={true}
+        zoomSpeed={0.3}
+        minDistance={2}
+        maxDistance={50}
+      />
       {positions && colors && (
         <PointCloud colors={colors} positions={positions} />
       )}

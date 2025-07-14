@@ -1,4 +1,6 @@
 :root {
+    font-family: sans-serif;
+    font-weight: 300;
     --color-blue: oklch(45% 50% 264deg);
     --color-red: oklch(50% 55% 31deg);
 

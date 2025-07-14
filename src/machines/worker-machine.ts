@@ -122,8 +122,9 @@ export const workerMachine = setup({
             const node = document.createElement("video");
             node.currentTime = 0;
             node.src = videoSrc;
-            node.muted = true; // Ensure video can autoplay
+            node.muted = true;
             node.preload = "metadata";
+            node.loop = true;
 
             node.addEventListener("loadedmetadata", () => {
               self.send({
@@ -140,6 +141,11 @@ export const workerMachine = setup({
             });
 
             node.addEventListener("play", () => {
+              self.send({ type: "playVideo" });
+            });
+
+            node.addEventListener("loadeddata", () => {
+              console.log("Video loaded, starting playback...");
               self.send({ type: "playVideo" });
             });
 

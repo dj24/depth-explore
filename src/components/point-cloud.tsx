@@ -13,7 +13,7 @@ export const PointCloud = ({
         <bufferAttribute attach="attributes-position" args={[positions, 3]} />
         <bufferAttribute attach="attributes-color" args={[colors, 3, true]} />
       </bufferGeometry>
-      <pointsMaterial size={0.1} vertexColors={true} />
+      <pointsMaterial size={0.15} vertexColors={true} />
     </points>
   );
 };
