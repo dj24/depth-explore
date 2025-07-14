@@ -25,7 +25,9 @@ const VideoUploader = () => {
 
   return (
     <>
-      <label htmlFor="video-upload">Upload Video</label>
+      <label className={styles.UploadControl} htmlFor="video-upload">
+        Upload Video
+      </label>
       <input
         id="video-upload"
         type="file"

@@ -18,3 +18,12 @@
   padding: 3rem;
   gap: 3rem;
 }
+
+.UploadControl {
+  background: var(--color-gray-600);
+  padding: 1rem;
+  width: 8rem;
+  margin:auto;
+  text-align: center;
+  border-radius: 1rem;
+}
