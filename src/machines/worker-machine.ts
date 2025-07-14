@@ -9,12 +9,24 @@ export type WorkerSetupVideoEvent = { type: "setupVideo"; videoSrc: string };
 export type WorkerPlayVideoEvent = { type: "playVideo" };
 export type WorkerPauseVideoEvent = { type: "pauseVideo" };
 export type WorkerProcessFrameEvent = { type: "processFrame" };
+export type WorkerSeekEvent = { type: "seek"; time: number };
+export type WorkerUpdateVideoMetadataEvent = {
+  type: "updateVideoMetadata";
+  duration: number;
+};
+export type WorkerUpdateCurrentTimeEvent = {
+  type: "updateCurrentTime";
+  currentTime: number;
+};
 
 export type WorkerEvent =
   | WorkerSetupVideoEvent
   | WorkerPlayVideoEvent
   | WorkerPauseVideoEvent
-  | WorkerProcessFrameEvent;
+  | WorkerProcessFrameEvent
+  | WorkerSeekEvent
+  | WorkerUpdateVideoMetadataEvent
+  | WorkerUpdateCurrentTimeEvent;
 
 export type WorkerContext = {
   positions: Float32Array | null;
@@ -23,6 +35,8 @@ export type WorkerContext = {
   worker: Worker | null;
   isPlaying: boolean;
   intervalRef: ReturnType<typeof setInterval> | null;
+  currentTime: number;
+  duration: number;
 };
 
 const FRAMES_PER_SECOND = 24;
@@ -108,18 +122,56 @@ export const workerMachine = setup({
             const node = document.createElement("video");
             node.currentTime = 0;
             node.src = videoSrc;
+            node.muted = true; // Ensure video can autoplay
+            node.preload = "metadata";
 
-            node.addEventListener("play", () => {
-              self.send({ type: "playVideo" });
+            // Remove the automatic event listeners that were causing conflicts
+            // We'll handle play/pause through the state machine only
+
+            // Load metadata to get duration
+            node.addEventListener("loadedmetadata", () => {
+              self.send({
+                type: "updateVideoMetadata",
+                duration: node.duration,
+              });
             });
 
-            node.addEventListener("pause", () => {
-              self.send({ type: "pauseVideo" });
+            // Update current time periodically
+            node.addEventListener("timeupdate", () => {
+              self.send({
+                type: "updateCurrentTime",
+                currentTime: node.currentTime,
+              });
             });
 
             return node;
           })
           .otherwise(() => context.video);
+      },
+      duration: ({ event, context }) => {
+        return match(event)
+          .with({ type: "setupVideo" }, () => 0)
+          .otherwise(() => context.duration);
+      },
+      currentTime: ({ event, context }) => {
+        return match(event)
+          .with({ type: "setupVideo" }, () => 0)
+          .otherwise(() => context.currentTime);
+      },
+    }),
+    updateVideoMetadata: assign({
+      duration: ({ event }) => (event as any).duration,
+    }),
+    updateCurrentTime: assign({
+      currentTime: ({ event }) => (event as any).currentTime,
+    }),
+    seekVideo: assign({
+      currentTime: ({ event, context }) => {
+        const seekEvent = event as WorkerSeekEvent;
+        if (context.video) {
+          context.video.currentTime = seekEvent.time;
+        }
+        return seekEvent.time;
       },
     }),
     startVideoPlayback: assign({
@@ -128,19 +180,22 @@ export const workerMachine = setup({
         if (!context.video) {
           return null;
         }
-        context.video.play();
+        // Use a promise to ensure play() completes
+        context.video.play().catch((error) => {
+          console.error("Failed to play video:", error);
+        });
+
         return setInterval(() => {
-          // Process video frame directly instead of sending start event
-          if (context.worker && context.video) {
+          if (context.worker && context.video && !context.video.paused) {
             self.send({ type: "processFrame" });
           }
-        }, 1000 / FRAMES_PER_SECOND); // 24 FPS
+        }, 1000 / FRAMES_PER_SECOND);
       },
     }),
     stopVideoPlayback: assign({
       isPlaying: () => false,
       intervalRef: ({ context }) => {
-        if (context.video) {
+        if (context.video && !context.video.paused) {
           context.video.pause();
         }
         if (context.intervalRef) {
@@ -167,12 +222,20 @@ export const workerMachine = setup({
     worker: null,
     isPlaying: false,
     intervalRef: null,
+    currentTime: 0,
+    duration: 0,
   },
   // Global transitions - these can be triggered from any state
   on: {
     setupVideo: {
       target: ".paused",
       actions: ["stopVideoPlayback", "setupVideo"],
+    },
+    updateVideoMetadata: {
+      actions: ["updateVideoMetadata"],
+    },
+    updateCurrentTime: {
+      actions: ["updateCurrentTime"],
     },
   },
   states: {
@@ -201,6 +264,9 @@ export const workerMachine = setup({
           target: "playing",
           actions: ["startVideoPlayback"],
         },
+        seek: {
+          actions: ["seekVideo"],
+        },
       },
     },
     playing: {
@@ -211,6 +277,9 @@ export const workerMachine = setup({
         },
         processFrame: {
           target: "processingFrame",
+        },
+        seek: {
+          actions: ["seekVideo"],
         },
       },
     },
