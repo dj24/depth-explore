@@ -17,12 +17,16 @@ const selectIsPlaying = (state: StateFrom<typeof workerMachine>) =>
 const selectIsLoading = (state: StateFrom<typeof workerMachine>) =>
   state.matches("loadingWorker");
 
+const selectIsEmpty = (state: StateFrom<typeof workerMachine>) =>
+  state.context.video === null;
+
 const WorkerContext = createContext<{
   positions: Float32Array | null;
   colors: Uint8Array | null;
   isPlaying: boolean;
   isLoading: boolean;
   send: (event: WorkerEvent) => void;
+  isEmpty: boolean;
 } | null>(null);
 
 export const WorkerProvider = ({ children }: { children: ReactNode }) => {
@@ -32,6 +36,7 @@ export const WorkerProvider = ({ children }: { children: ReactNode }) => {
   const colors = useSelector(actor, selectColors);
   const isPlaying = useSelector(actor, selectIsPlaying);
   const isLoading = useSelector(actor, selectIsLoading);
+  const isEmpty = useSelector(actor, selectIsEmpty);
 
   return (
     <WorkerContext.Provider
@@ -41,6 +46,7 @@ export const WorkerProvider = ({ children }: { children: ReactNode }) => {
         isPlaying,
         isLoading,
         send: actor.send,
+        isEmpty,
       }}
     >
       {children}
