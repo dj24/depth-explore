@@ -1,4 +1,4 @@
-const TARGET_WIDTH = 640;
+const TARGET_WIDTH = 320;
 
 export const renderVideoFrame = async (
   video: HTMLVideoElement,
@@ -6,10 +6,6 @@ export const renderVideoFrame = async (
   const downscaleFactor = TARGET_WIDTH / video.videoWidth;
   const downscaledWidth = Math.floor(video.videoWidth * downscaleFactor);
   const downscaledHeight = Math.floor(video.videoHeight * downscaleFactor);
-
-  console.log(
-    `Rendering video frame at downscaled dimensions: ${downscaledWidth}x${downscaledHeight}`,
-  );
 
   const canvas = new OffscreenCanvas(downscaledWidth, downscaledHeight);
   const context = canvas.getContext("2d");

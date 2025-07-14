@@ -125,10 +125,6 @@ export const workerMachine = setup({
             node.muted = true; // Ensure video can autoplay
             node.preload = "metadata";
 
-            // Remove the automatic event listeners that were causing conflicts
-            // We'll handle play/pause through the state machine only
-
-            // Load metadata to get duration
             node.addEventListener("loadedmetadata", () => {
               self.send({
                 type: "updateVideoMetadata",
@@ -136,12 +132,27 @@ export const workerMachine = setup({
               });
             });
 
-            // Update current time periodically
             node.addEventListener("timeupdate", () => {
               self.send({
                 type: "updateCurrentTime",
                 currentTime: node.currentTime,
               });
+            });
+
+            node.addEventListener("play", () => {
+              self.send({ type: "playVideo" });
+            });
+
+            node.addEventListener("pause", () => {
+              self.send({ type: "pauseVideo" });
+            });
+
+            node.addEventListener("emptied", () => {
+              self.send({ type: "pauseVideo" });
+            });
+
+            node.addEventListener("ended", () => {
+              self.send({ type: "pauseVideo" });
             });
 
             return node;
@@ -168,12 +179,13 @@ export const workerMachine = setup({
         (event as unknown as { currentTime: number }).currentTime,
     }),
     seekVideo: assign({
-      currentTime: ({ event, context }) => {
-        const seekEvent = event as WorkerSeekEvent;
-        if (context.video) {
-          context.video.currentTime = seekEvent.time;
+      video: ({ context, event, self }) => {
+        if (!context.video) {
+          return null;
         }
-        return seekEvent.time;
+        context.video.currentTime = (event as WorkerSeekEvent).time;
+        self.send({ type: "processFrame" });
+        return context.video;
       },
     }),
     startVideoPlayback: assign({
@@ -227,7 +239,6 @@ export const workerMachine = setup({
     currentTime: 0,
     duration: 0,
   },
-  // Global transitions - these can be triggered from any state
   on: {
     setupVideo: {
       target: ".paused",
@@ -238,6 +249,9 @@ export const workerMachine = setup({
     },
     updateCurrentTime: {
       actions: ["updateCurrentTime"],
+    },
+    seekVideo: {
+      actions: ["seekVideo"],
     },
   },
   states: {
@@ -257,17 +271,12 @@ export const workerMachine = setup({
         },
       },
     },
-    noVideo: {
-      // No events needed here - setupVideo is handled globally
-    },
+    noVideo: {},
     paused: {
       on: {
         playVideo: {
           target: "playing",
           actions: ["startVideoPlayback"],
-        },
-        seek: {
-          actions: ["seekVideo"],
         },
       },
     },
@@ -279,9 +288,6 @@ export const workerMachine = setup({
         },
         processFrame: {
           target: "processingFrame",
-        },
-        seek: {
-          actions: ["seekVideo"],
         },
       },
     },

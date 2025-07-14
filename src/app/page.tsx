@@ -1,27 +1,33 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React from "react";
 import styles from "./page.module.css";
-import { useWorkerContext } from "@/contexts/worker-context";
-import { useVideoUpload } from "@/hooks/use-video-upload";
+import {
+  useColors,
+  useCurrentTime,
+  useIsEmpty,
+  useIsLoading,
+  useIsPlaying,
+  usePositions,
+  useVideoDuration,
+  useWorkerContext,
+} from "@/contexts/worker-context";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import { PointCloud } from "@/components/point-cloud";
 import { PlaybackSlider } from "@/components/playback-slider";
+import { PauseIcon } from "@/components/icons/pause";
+import { PlayIcon } from "@/components/icons/play";
 
 const VideoUploader = () => {
-  const { isLoading, send } = useWorkerContext();
-  const { videoSrc: uploadedVideoSrc, handleVideoUpload } = useVideoUpload();
+  const { actor } = useWorkerContext();
 
-  useEffect(() => {
-    if (uploadedVideoSrc) {
-      send({ type: "setupVideo", videoSrc: uploadedVideoSrc });
+  const handleVideoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file && file.type.startsWith("video/")) {
+      actor.send({ type: "setupVideo", videoSrc: URL.createObjectURL(file) });
     }
-  }, [uploadedVideoSrc, send]);
-
-  if (isLoading) {
-    return <div>Loading worker...</div>;
-  }
+  };
 
   return (
     <>
@@ -39,23 +45,54 @@ const VideoUploader = () => {
   );
 };
 
+const PlayPauseButton = () => {
+  const isPlaying = useIsPlaying();
+  const { actor } = useWorkerContext();
+
+  return (
+    <button
+      onClick={() =>
+        actor.send({ type: isPlaying ? "pauseVideo" : "playVideo" })
+      }
+    >
+      {isPlaying ? <PauseIcon /> : <PlayIcon />}
+    </button>
+  );
+};
+
 const PlaybackControls = () => {
-  const { isPlaying, send } = useWorkerContext();
+  const currentTime = useCurrentTime();
+  const duration = useVideoDuration();
+  const { actor } = useWorkerContext();
+
+  const sliderValue = (currentTime / duration) * 100;
 
   return (
     <div className={styles.PlaybackControls}>
-      <button
-        onClick={() => send({ type: isPlaying ? "pauseVideo" : "playVideo" })}
-      >
-        {isPlaying ? "Pause" : "Play"}
-      </button>
-      <PlaybackSlider />
+      <PlayPauseButton />
+      <PlaybackSlider
+        onValueCommitted={(value) => {
+          if (typeof value === "number") {
+            actor.send({
+              type: "seekVideo",
+              time: (value / 100) * duration,
+            });
+          } else {
+            actor.send({
+              type: "seekVideo",
+              time: (value[0] / 100) * duration,
+            });
+          }
+        }}
+        value={isNaN(sliderValue) ? 0 : sliderValue}
+      />
     </div>
   );
 };
 
 const CanvasWrapper = () => {
-  const { positions, colors } = useWorkerContext();
+  const positions = usePositions();
+  const colors = useColors();
 
   return (
     <Canvas camera={{ fov: 15 }}>
@@ -68,7 +105,7 @@ const CanvasWrapper = () => {
 };
 
 export default function Home() {
-  const { isEmpty } = useWorkerContext();
+  const isEmpty = useIsEmpty();
 
   return (
     <main className={styles.Page}>
